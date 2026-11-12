@@ -8,7 +8,8 @@ const testFiles = [
     './utils/invoiceCalculations.test.js',
     './utils/numberToWords.test.js',
     './utils/validation.test.js',
-    './utils/templates.test.js'
+    './utils/templates.test.js',
+    './utils/clientHelpers.test.js'
 ];
 
 async function runTests() {
