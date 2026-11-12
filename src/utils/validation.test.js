@@ -1,4 +1,4 @@
-import { validateGST, validateEmail, validatePhone } from './validation.js';
+import { validateGST, validateEmail, validatePhone } from './validation.ts';
 
 console.log('Running Validation Tests...');
 
