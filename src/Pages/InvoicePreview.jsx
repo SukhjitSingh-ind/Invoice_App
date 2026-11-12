@@ -10,7 +10,6 @@ import PaymentQRCode from '../components/PaymentQRCode';
 import html2pdf from 'html2pdf.js';
 
 import logoImg from '../assets/Logo_1_HD.png';
-import qrCodeImg from '../assets/QRCODE_1.jpg';
 
 const THEME_STYLES = {
   blue: {
@@ -82,25 +81,17 @@ const THEME_STYLES = {
 export default function InvoicePreview() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const [invoice, setInvoice] = useState(null);
-  const [settings, setSettings] = useState(null);
+  const [settings] = useState(() => getSettings());
+  const [invoice] = useState(() => (id ? getInvoice(id) || null : null));
 
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
-    const currentSettings = getSettings();
-    setSettings(currentSettings);
-
-    if (id) {
-      const data = getInvoice(id);
-      if (data) {
-        setInvoice(data);
-      } else {
-        navigate('/');
-      }
+    if (id && !invoice) {
+      navigate('/');
     }
-  }, [id, navigate]);
+  }, [id, invoice, navigate]);
 
   if (!invoice) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
@@ -131,11 +122,9 @@ export default function InvoicePreview() {
 
   const {
     subtotal,
-    taxAmount,
     igstAmount,
     cgstAmount,
     sgstAmount,
-    preDiscountTotal,
     discountAmount,
     total,
     balance,

@@ -113,12 +113,9 @@ export const upsertClient = (clientData) => {
  * @returns {Object} Saved client object
  */
 export const saveClient = (client) => {
-    // If client has an ID, update it
     if (client.id) {
         return updateClient(client.id, client);
     }
-
-    // Otherwise create new
     return createClient(client);
 };
 
@@ -130,9 +127,7 @@ export const saveClient = (client) => {
 export const deleteClient = (id) => {
     try {
         let clients = getAllClients();
-        // Convert both to string for reliable comparison
         clients = clients.filter(client => String(client.id) !== String(id));
-
         saveClients(clients);
         return true;
     } catch (error) {
@@ -166,17 +161,13 @@ export const exportClientsToJSON = () => {
         const blob = new Blob([jsonString], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
 
-        // Create download link
         const link = document.createElement('a');
         link.href = url;
         const timestamp = new Date().toISOString().split('T')[0];
         link.download = `clients_backup_${timestamp}.json`;
 
-        // Trigger download
         document.body.appendChild(link);
         link.click();
-
-        // Cleanup
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
     } catch (error) {
@@ -193,31 +184,25 @@ export const exportClientsToJSON = () => {
  */
 export const importClientsFromJSON = (jsonData) => {
     try {
-        // Parse JSON
         const importedClients = JSON.parse(jsonData);
 
-        // Validate structure
         if (!Array.isArray(importedClients)) {
             throw new Error('Invalid JSON format: Expected an array of clients');
         }
 
-        // Validate each client has required fields
         for (let i = 0; i < importedClients.length; i++) {
             const client = importedClients[i];
             if (!client.name || typeof client.name !== 'string') {
                 throw new Error(`Invalid client at index ${i}: Missing or invalid 'name' field`);
             }
-            // Mobile is now optional
-            // if (!client.mobile || typeof client.mobile !== 'string') {
-            //     throw new Error(`Invalid client at index ${i}: Missing or invalid 'mobile' field`);
-            // }
         }
 
-        // Import clients using upsert (update existing or create new)
         let importedCount = 0;
         importedClients.forEach(clientData => {
-            // Remove id and timestamps to let upsertClient handle them
-            const { id, createdAt, updatedAt, ...cleanClientData } = clientData;
+            const cleanClientData = { ...clientData };
+            delete cleanClientData.id;
+            delete cleanClientData.createdAt;
+            delete cleanClientData.updatedAt;
             upsertClient(cleanClientData);
             importedCount++;
         });

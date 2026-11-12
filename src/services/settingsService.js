@@ -48,20 +48,17 @@ export const getSettings = () => {
     try {
         const data = localStorage.getItem(SETTINGS_KEY);
         if (!data) {
-            // Initialize with defaults if not found
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS));
             return DEFAULT_SETTINGS;
         }
         const saved = JSON.parse(data);
 
-        // Merge with defaults to ensure new fields are present
         return {
             ...DEFAULT_SETTINGS,
             ...saved,
             validation: { ...DEFAULT_SETTINGS.validation, ...saved.validation },
             display: { ...DEFAULT_SETTINGS.display, ...saved.display },
             payment: { ...DEFAULT_SETTINGS.payment, ...saved.payment },
-            // Ensure companyProfiles exists if it wasn't there before
             companyProfiles: saved.companyProfiles || DEFAULT_SETTINGS.companyProfiles,
             activeProfileId: saved.activeProfileId || DEFAULT_SETTINGS.activeProfileId
         };

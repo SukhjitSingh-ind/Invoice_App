@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Layout, Users, X, Save } from 'lucide-react';
 import { TEMPLATES } from '../utils/templates';
@@ -10,21 +10,15 @@ import { useToast } from '../components/Toast';
 export default function CreateInvoice() {
     const navigate = useNavigate();
     const [selectedClient, setSelectedClient] = useState('');
-    const [clients, setClients] = useState([]);
+    const [clients, setClients] = useState(() => getAllClients());
     const [isGST, setIsGST] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState(createEmptyClient());
     const { addToast } = useToast();
 
-
-    useEffect(() => {
-        loadClients();
+    const loadClients = useCallback(() => {
+        setClients(getAllClients());
     }, []);
-
-    const loadClients = () => {
-        const allClients = getAllClients();
-        setClients(allClients);
-    };
 
     const handleCreate = (templateId) => {
         const params = new URLSearchParams();

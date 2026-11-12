@@ -77,7 +77,6 @@ export const getItemSalesReport = () => {
         priceInstances: stats.priceInstances.sort((a, b) => new Date(b.date) - new Date(a.date))
     }));
 
-    // Remove temporary prices array
     results.forEach(item => delete item.prices);
 
     return results;
@@ -108,7 +107,6 @@ export const getClientPurchaseReport = () => {
         const clientStats = clientMap.get(normalizedClient);
         clientStats.totalInvoices += 1;
 
-        // Calculate invoice total including discount
         let invoiceTotal = 0;
         invoice.items?.forEach(item => {
             const itemTotal = calculateItemTotal(item, isGST);
@@ -130,7 +128,6 @@ export const getClientPurchaseReport = () => {
             itemStats.totalCost += itemTotal;
         });
 
-        // Apply discount to invoice total
         const discountValue = parseFloat(invoice.discountValue || 0);
         const discountAmount = invoice.discountType === 'percentage'
             ? (invoiceTotal * discountValue / 100)
@@ -139,7 +136,6 @@ export const getClientPurchaseReport = () => {
         clientStats.totalSpent += Math.max(0, invoiceTotal - discountAmount);
     });
 
-    // Convert itemsPurchased Map to Array
     const results = Array.from(clientMap.values()).map(stats => ({
         ...stats,
         itemsPurchased: Array.from(stats.itemsPurchased.values())

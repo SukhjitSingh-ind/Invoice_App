@@ -47,7 +47,6 @@ export const getAllInvoices = () => {
 
 export const getInvoice = (id) => {
     const invoices = getAllInvoices();
-    // Handle both string and number IDs
     const numId = typeof id === 'string' ? parseInt(id, 10) : id;
     return invoices.find(inv => inv.id === numId);
 };
@@ -56,7 +55,6 @@ export const saveInvoice = (invoice) => {
     try {
         const invoices = getAllInvoices();
         if (invoice.id) {
-            // Update existing
             const index = invoices.findIndex(inv => inv.id === invoice.id);
             if (index !== -1) {
                 invoices[index] = invoice;
@@ -64,7 +62,6 @@ export const saveInvoice = (invoice) => {
                 invoices.push(invoice);
             }
         } else {
-            // Create new
             invoice.id = Date.now();
             invoices.push(invoice);
         }
@@ -79,15 +76,8 @@ export const saveInvoice = (invoice) => {
 export const deleteInvoice = (id) => {
     try {
         let invoices = getAllInvoices();
-        // Handle both string and number IDs
         const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-
-
-
         invoices = invoices.filter(inv => inv.id !== numId);
-
-
-
         localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
         return true;
     } catch (error) {
@@ -242,18 +232,11 @@ export const importInvoices = (jsonData) => {
         let updatedCount = 0;
 
         newInvoices.forEach(newInv => {
-            // Basic validation: ensure ID and number exist
             if (!newInv.id || !newInv.number) return;
 
             const index = currentInvoices.findIndex(inv => inv.id === newInv.id);
             if (index !== -1) {
-                // Update existing? Or skip? Let's skip for safety to avoid overwriting unless explictly requested, 
-                // BUT for simple restore, maybe we want to update.
-                // Let's go with: Merge strategy -> If ID matches, we keep the LOCAL version to be safe, 
-                // OR we can make a choice. A better 'restore' overrides.
-                // Let's assume 'backup restore' implies overriding or adding missing.
-                // For now, let's ADD only if not exists to be non-destructive by default.
-                // actually, let's simply overwrite if it exists to allow restoring old state.
+                // Upsert: Overwrite existing local record on restore
                 currentInvoices[index] = newInv;
                 updatedCount++;
             } else {

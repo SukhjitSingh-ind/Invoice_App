@@ -1,4 +1,3 @@
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
@@ -8,7 +7,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const testFiles = [
     './utils/invoiceCalculations.test.js',
     './utils/numberToWords.test.js',
-    './utils/validation.test.js'
+    './utils/validation.test.js',
+    './utils/templates.test.js'
 ];
 
 async function runTests() {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, TrendingUp, Package, Users, DollarSign, FileSpreadsheet, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
@@ -17,23 +17,13 @@ const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4'
 
 export default function Reports() {
     const navigate = useNavigate();
-    const [summary, setSummary] = useState(null);
-    const [itemSales, setItemSales] = useState([]);
-    const [clientPurchases, setClientPurchases] = useState([]);
+    const [summary] = useState(() => getSummaryStats());
+    const [itemSales] = useState(() => getItemSalesReport());
+    const [clientPurchases] = useState(() => getClientPurchaseReport());
     const [searchQuery, setSearchQuery] = useState('');
     const [expandedClients, setExpandedClients] = useState(new Set());
     const [expandedItems, setExpandedItems] = useState(new Set());
     const { addToast } = useToast();
-
-    useEffect(() => {
-        loadReports();
-    }, []);
-
-    const loadReports = () => {
-        setSummary(getSummaryStats());
-        setItemSales(getItemSalesReport());
-        setClientPurchases(getClientPurchaseReport());
-    };
 
     const toggleClientExpand = (clientName) => {
         const newExpanded = new Set(expandedClients);
@@ -63,7 +53,7 @@ export default function Reports() {
             const timestamp = new Date().toISOString().split('T')[0];
             XLSX.writeFile(workbook, `${filename}_${timestamp}.xlsx`);
             addToast('Report exported to Excel successfully!', 'success');
-        } catch (error) {
+        } catch {
             addToast('Failed to export to Excel', 'error');
         }
     };
@@ -140,32 +130,42 @@ export default function Reports() {
         exportToExcel(clientsData, 'client_purchase_report', 'Clients');
     };
 
-    const filteredItems = itemSales.filter(item =>
-        item.itemName.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const { filteredItems, filteredClients, topItemsByRevenue, topItemsByQuantity, topClientsBySpending } = useMemo(() => {
+        const query = searchQuery.toLowerCase().trim();
+        const fItems = itemSales.filter(item =>
+            !query || item.itemName.toLowerCase().includes(query)
+        );
 
-    const filteredClients = clientPurchases.filter(client =>
-        client.clientName.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+        const fClients = clientPurchases.filter(client =>
+            !query || client.clientName.toLowerCase().includes(query)
+        );
 
-    // Prepare data for pie charts
-    const topItemsByRevenue = getTopItemsByRevenue(5).map((item, index) => ({
-        name: item.itemName.length > 20 ? item.itemName.substring(0, 20) + '...' : item.itemName,
-        value: item.totalRevenue,
-        fullName: item.itemName
-    }));
+        const topRev = getTopItemsByRevenue(5).map((item) => ({
+            name: item.itemName.length > 20 ? item.itemName.substring(0, 20) + '...' : item.itemName,
+            value: item.totalRevenue,
+            fullName: item.itemName
+        }));
 
-    const topItemsByQuantity = getTopItemsByQuantity(5).map((item, index) => ({
-        name: item.itemName.length > 20 ? item.itemName.substring(0, 20) + '...' : item.itemName,
-        value: item.totalQuantity,
-        fullName: item.itemName
-    }));
+        const topQty = getTopItemsByQuantity(5).map((item) => ({
+            name: item.itemName.length > 20 ? item.itemName.substring(0, 20) + '...' : item.itemName,
+            value: item.totalQuantity,
+            fullName: item.itemName
+        }));
 
-    const topClientsBySpending = clientPurchases.slice(0, 5).map((client, index) => ({
-        name: client.clientName.length > 20 ? client.clientName.substring(0, 20) + '...' : client.clientName,
-        value: client.totalSpent,
-        fullName: client.clientName
-    }));
+        const topSpend = clientPurchases.slice(0, 5).map((client) => ({
+            name: client.clientName.length > 20 ? client.clientName.substring(0, 20) + '...' : client.clientName,
+            value: client.totalSpent,
+            fullName: client.clientName
+        }));
+
+        return {
+            filteredItems: fItems,
+            filteredClients: fClients,
+            topItemsByRevenue: topRev,
+            topItemsByQuantity: topQty,
+            topClientsBySpending: topSpend
+        };
+    }, [itemSales, clientPurchases, searchQuery]);
 
     if (!summary) return <div>Loading...</div>;
 

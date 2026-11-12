@@ -28,14 +28,14 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
             </button>
 
             <div className={`p-6 ${!isOpen && 'flex justify-center px-2'}`}>
-                <a href="/" className={`flex items-center gap-3 hover:opacity-80 transition-opacity ${!isOpen && 'justify-center'}`}>
+                <Link to="/" className={`flex items-center gap-3 hover:opacity-80 transition-opacity ${!isOpen && 'justify-center'}`}>
                     <div className="w-12 h-12 rounded-lg overflow-hidden p-1 flex-shrink-0">
                         <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
                     </div>
                     <div className={`${!isOpen && 'hidden'} transition-opacity duration-200 overflow-hidden`}>
                         <h1 className="font-bold text-lg leading-tight whitespace-nowrap">Invoice<br /><span className="text-blue-400">Manager</span></h1>
                     </div>
-                </a>
+                </Link>
             </div>
 
             <nav className="flex-1 py-6 px-3">

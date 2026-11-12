@@ -8,7 +8,6 @@ export default function InvoiceItemsTable({
     addItem,
     handleSort,
     sortConfig,
-    baseSortIcon,
     validationErrors,
     subtotal,
     igstAmount,
