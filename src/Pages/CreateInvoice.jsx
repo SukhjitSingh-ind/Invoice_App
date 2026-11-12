@@ -63,7 +63,7 @@ export default function CreateInvoice() {
         return filterClients(clients, searchQuery);
     }, [clients, searchQuery]);
 
-    // Paginate the filtered client records (10 per page default)
+    // Paginate the filtered client records (12 per page default for balanced 3-column / 2-column grid rows)
     const paginationData = useMemo(() => {
         return paginateClients(filteredClients, currentPage, CLIENTS_PER_PAGE);
     }, [filteredClients, currentPage]);
@@ -329,7 +329,7 @@ export default function CreateInvoice() {
                             </div>
                         </div>
                     ) : (
-                        /* Responsive Client Card Grid (10 per page default) */
+                        /* Responsive Client Card Grid (12 per page default: 4 rows × 3 cols on desktop, 6 rows × 2 cols on tablet) */
                         <>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {paginatedClients.map(client => {
