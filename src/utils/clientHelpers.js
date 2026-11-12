@@ -10,6 +10,8 @@ export const AVATAR_COLOR_PALETTES = [
     'bg-amber-100 text-amber-800 border-amber-200',
 ];
 
+export const CLIENTS_PER_PAGE = 10;
+
 /**
  * Deterministically derives an avatar color palette based on client name and ID
  */
@@ -53,4 +55,43 @@ export const filterClients = (clients = [], searchQuery = '') => {
         const addressMatch = (client.address || '').toLowerCase().includes(query);
         return nameMatch || mobileMatch || emailMatch || gstMatch || addressMatch;
     });
+};
+
+/**
+ * Returns a paginated slice of clients and metadata
+ */
+export const paginateClients = (clients = [], page = 1, pageSize = CLIENTS_PER_PAGE) => {
+    const totalItems = Array.isArray(clients) ? clients.length : 0;
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const validPage = Math.min(Math.max(1, Math.floor(page) || 1), totalPages);
+    const startIndex = (validPage - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, totalItems);
+    const items = (Array.isArray(clients) ? clients : []).slice(startIndex, endIndex);
+
+    return {
+        items,
+        page: validPage,
+        totalPages,
+        totalItems,
+        startIndex,
+        endIndex,
+        hasNextPage: validPage < totalPages,
+        hasPrevPage: validPage > 1,
+    };
+};
+
+/**
+ * Returns array of page numbers and ellipsis strings for pagination UI
+ */
+export const getPageNumbers = (currentPage, totalPages) => {
+    if (totalPages <= 7) {
+        return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (currentPage <= 4) {
+        return [1, 2, 3, 4, 5, '...', totalPages];
+    }
+    if (currentPage >= totalPages - 3) {
+        return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
 };
