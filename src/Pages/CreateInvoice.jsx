@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Plus,
@@ -36,7 +36,7 @@ export default function CreateInvoice() {
     const navigate = useNavigate();
     const [selectedClient, setSelectedClient] = useState('');
     const [selectedTemplate, setSelectedTemplate] = useState('');
-    const [clients, setClients] = useState([]);
+    const [clients, setClients] = useState(() => getAllClients());
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [isGST, setIsGST] = useState(false);
@@ -44,18 +44,19 @@ export default function CreateInvoice() {
     const [formData, setFormData] = useState(createEmptyClient());
     const { addToast } = useToast();
 
-    useEffect(() => {
-        loadClients();
-    }, []);
-
-    // Automatically reset pagination to page 1 whenever search query changes
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchQuery]);
-
     const loadClients = () => {
         const allClients = getAllClients();
         setClients(allClients);
+    };
+
+    const handleSearchChange = (e) => {
+        setSearchQuery(e.target.value);
+        setCurrentPage(1);
+    };
+
+    const handleClearSearch = () => {
+        setSearchQuery('');
+        setCurrentPage(1);
     };
 
     // Filter clients dynamically across all records by name, mobile, email, GST, or address
@@ -253,14 +254,14 @@ export default function CreateInvoice() {
                             <input
                                 type="text"
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={handleSearchChange}
                                 placeholder="Search clients across entire directory by name, phone, email, location, or GST..."
                                 className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
                             />
                             {searchQuery && (
                                 <button
                                     type="button"
-                                    onClick={() => setSearchQuery('')}
+                                    onClick={handleClearSearch}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-md transition-colors cursor-pointer"
                                     aria-label="Clear search"
                                 >
@@ -313,7 +314,7 @@ export default function CreateInvoice() {
                             <div>
                                 <button
                                     type="button"
-                                    onClick={() => setSearchQuery('')}
+                                    onClick={handleClearSearch}
                                     className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer shadow-sm"
                                 >
                                     Clear Search
