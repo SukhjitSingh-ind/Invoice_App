@@ -8,7 +8,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const testFiles = [
     './utils/invoiceCalculations.test.js',
     './utils/numberToWords.test.js',
-    './utils/validation.test.js'
+    './utils/validation.test.js',
+    './utils/clientHelpers.test.js'
 ];
 
 async function runTests() {
