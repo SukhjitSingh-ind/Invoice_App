@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { Package, Plus, Search, Edit2, Trash2, X, Save, DollarSign, Hash, Tag, Download, Upload, TrendingUp } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { getAllItems, saveItem, deleteItem, createEmptyItem, exportItemsToJSON, importItemsFromJSON } from '../services/itemService';
 import { useToast } from '../components/Toast';
 
 export default function Items() {
-    const [items, setItems] = useState([]);
+    const [items, setItems] = useState(() => getAllItems());
     const [searchQuery, setSearchQuery] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
@@ -16,19 +16,18 @@ export default function Items() {
     const { addToast } = useToast();
     const fileInputRef = useRef(null);
 
-    useEffect(() => {
-        loadItems();
+    const loadItems = useCallback(() => {
+        setItems(getAllItems());
     }, []);
 
-    const loadItems = () => {
-        const allItems = getAllItems();
-        setItems(allItems);
-    };
-
-    const filteredItems = items.filter(item =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    const filteredItems = useMemo(() => {
+        const query = searchQuery.toLowerCase().trim();
+        if (!query) return items;
+        return items.filter(item =>
+            (item.name && item.name.toLowerCase().includes(query)) ||
+            (item.description && item.description.toLowerCase().includes(query))
+        );
+    }, [items, searchQuery]);
 
     const handleOpenModal = (item = null) => {
         if (item) {
@@ -89,7 +88,7 @@ export default function Items() {
         try {
             exportItemsToJSON();
             addToast('Items exported successfully!', 'success');
-        } catch (error) {
+        } catch {
             addToast('Failed to export items', 'error');
         }
     };

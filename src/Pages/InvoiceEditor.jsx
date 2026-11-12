@@ -23,97 +23,82 @@ import InvoiceFooter from '../components/InvoiceEditor/InvoiceFooter';
 export default function InvoiceEditor() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const [invoice, setInvoice] = useState(null);
   const [searchParams] = useSearchParams();
   const templateId = searchParams.get('template');
   const clientId = searchParams.get('clientId');
   const isGSTParam = searchParams.get('gst') === 'true';
-  const [settings, setSettings] = useState(null);
+
+  const [settings] = useState(() => getSettings());
+  const [libraryItems] = useState(() => getAllItems());
+  const [selectedLibraryItem, setSelectedLibraryItem] = useState('');
   const [validationErrors, setValidationErrors] = useState({});
   const { addToast } = useToast();
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
-  const [libraryItems, setLibraryItems] = useState([]);
-  const [selectedLibraryItem, setSelectedLibraryItem] = useState('');
   const [showCustomization, setShowCustomization] = useState(false);
-  const [customization, setCustomization] = useState({
-    backgroundColor: '',
-    fontColor: '',
-    backgroundImage: ''
+
+  const [invoice, setInvoice] = useState(() => {
+    if (id && id !== 'new') {
+      return getInvoice(id) || null;
+    }
+    const newInv = createEmptyInvoice();
+    newInv.number = getNextInvoiceNumber();
+    if (templateId) newInv.template = templateId;
+
+    if (clientId) {
+      const clientData = getClient(clientId);
+      if (clientData) {
+        newInv.recipient.name = clientData.name;
+        newInv.recipient.mobile = clientData.mobile;
+        newInv.recipient.address = clientData.address || '';
+        if (clientData.gstNumber) {
+          newInv.recipient.gstNumber = clientData.gstNumber;
+        }
+      }
+    }
+
+    const activeProfile = getActiveProfile();
+    if (activeProfile) {
+      newInv.sender.name = activeProfile.name || newInv.sender.name;
+      newInv.sender.address = activeProfile.address || newInv.sender.address;
+      newInv.sender.phone = activeProfile.phone || newInv.sender.phone;
+      newInv.sender.gstNumber = activeProfile.gstNumber || newInv.sender.gstNumber;
+
+      if (activeProfile.bankDetails) {
+        newInv.bankDetails = {
+          ...(newInv.bankDetails || {}),
+          ...activeProfile.bankDetails,
+        };
+      }
+    }
+
+    if (isGSTParam) newInv.isGST = true;
+    return newInv;
+  });
+
+  const [customization, setCustomization] = useState(() => {
+    if (id && id !== 'new') {
+      const data = getInvoice(id);
+      return data?.customization || { backgroundColor: '', fontColor: '', backgroundImage: '' };
+    }
+    return { backgroundColor: '', fontColor: '', backgroundImage: '' };
   });
 
   useEffect(() => {
-    // Load settings and library items
-    const currentSettings = getSettings();
-    setSettings(currentSettings);
-    const items = getAllItems();
-    setLibraryItems(items);
-
-    if (id && id !== 'new') {
-      const data = getInvoice(id);
-      if (data) {
-        setInvoice(data);
-        if (data.customization) {
-          setCustomization(data.customization);
-        }
-      } else {
-        navigate('/');
-      }
-    } else {
-      // Create new
-      const newInv = createEmptyInvoice();
-      newInv.number = getNextInvoiceNumber();
-      if (templateId) newInv.template = templateId;
-
-      // Load client data if clientId is provided
-      if (clientId) {
-        const clientData = getClient(clientId);
-        if (clientData) {
-          newInv.recipient.name = clientData.name;
-          newInv.recipient.mobile = clientData.mobile;
-          newInv.recipient.address = clientData.address || '';
-          if (clientData.gstNumber) {
-            newInv.recipient.gstNumber = clientData.gstNumber;
-          }
-        }
-      }
-
-      // Apply active company profile details to sender and bank details
-      const activeProfile = getActiveProfile();
-      if (activeProfile) {
-        newInv.sender.name = activeProfile.name || newInv.sender.name;
-        newInv.sender.address = activeProfile.address || newInv.sender.address;
-        newInv.sender.phone = activeProfile.phone || newInv.sender.phone;
-        newInv.sender.gstNumber = activeProfile.gstNumber || newInv.sender.gstNumber;
-
-        if (activeProfile.bankDetails) {
-          newInv.bankDetails = {
-            ...(newInv.bankDetails || {}),
-            ...activeProfile.bankDetails,
-          };
-        }
-      }
-
-      if (isGSTParam) newInv.isGST = true;
-      setInvoice(newInv);
-      if (newInv.customization) {
-        setCustomization(newInv.customization);
-      }
+    if (id && id !== 'new' && !invoice) {
+      navigate('/');
     }
-  }, [id, navigate, searchParams, templateId, clientId, isGSTParam]);
+  }, [id, invoice, navigate]);
 
   if (!invoice || !settings) return <div>Loading...</div>;
 
   // Calculations (shared utility)
   const {
     subtotal,
-    taxAmount,
     igstAmount,
     cgstAmount,
     sgstAmount,
-    preDiscountTotal,
     discountAmount,
     total,
-    balance,
   } = calculateInvoiceTotals(invoice);
   const amountInWords = numberToWords(isNaN(total) ? 0 : total);
 
@@ -154,7 +139,7 @@ export default function InvoiceEditor() {
     }
 
     // Validate items
-    invoice.items.forEach((item, index) => {
+    invoice.items.forEach((item) => {
       // Validate price
       if (settings.validation.priceGreaterThanZero && item.price <= 0) {
         errors[`price_${item.id}`] = 'Price must be greater than zero';
@@ -259,13 +244,6 @@ export default function InvoiceEditor() {
     setInvoice(prev => ({ ...prev, items: prev.items.filter(item => item.id !== id) }));
   };
 
-  const handleDetailedItemChange = (id, field, value) => {
-    setInvoice(prev => ({
-      ...prev,
-      items: prev.items.map(item => item.id === id ? { ...item, [field]: value } : item)
-    }));
-  };
-
   const handleCustomizationChange = (field, value) => {
     setCustomization(prev => ({ ...prev, [field]: value }));
   };
@@ -318,11 +296,6 @@ export default function InvoiceEditor() {
       });
       return { ...prev, items: sortedItems };
     });
-  };
-
-  const getSortIcon = (key) => {
-    if (sortConfig.key !== key) return <ArrowUpDown size={14} className="opacity-30 group-hover:opacity-100 transition-opacity" />;
-    return sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />;
   };
 
   const handleChangeWrapper = (section, field, value) => {

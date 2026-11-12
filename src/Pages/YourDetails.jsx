@@ -1,31 +1,36 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
     Building2, Plus, Trash2, Check, Star, Upload,
     MapPin, Phone, Mail, FileText, CreditCard, Save
 } from 'lucide-react';
 import {
-    getSettings, updateSettings,
+    getSettings,
     getCompanyProfiles, addCompanyProfile,
     updateCompanyProfile, deleteCompanyProfile,
-    setActiveProfile, getActiveProfile
+    setActiveProfile
 } from '../services/settingsService';
 import { useToast } from '../components/Toast';
 
 export default function YourDetails() {
-    const [profiles, setProfiles] = useState([]);
-    const [activeProfileId, setActiveProfileId] = useState(null);
-    const [selectedProfileId, setSelectedProfileId] = useState(null);
+    const [profiles, setProfiles] = useState(() => getCompanyProfiles());
+    const [activeProfileId, setActiveProfileId] = useState(() => getSettings().activeProfileId);
+    const [selectedProfileId, setSelectedProfileId] = useState(() => {
+        const settings = getSettings();
+        const currentProfiles = getCompanyProfiles();
+        return settings.activeProfileId || currentProfiles[0]?.id || null;
+    });
     const [pendingProfileId, setPendingProfileId] = useState(null); // For unsaved changes modal
-    const [formData, setFormData] = useState(null);
+    const [formData, setFormData] = useState(() => {
+        const settings = getSettings();
+        const currentProfiles = getCompanyProfiles();
+        const targetId = settings.activeProfileId || currentProfiles[0]?.id || null;
+        return currentProfiles.find(p => p.id === targetId) || null;
+    });
     const [isDirty, setIsDirty] = useState(false);
     const fileInputRef = useRef(null);
     const { addToast } = useToast();
 
-    useEffect(() => {
-        loadData();
-    }, []);
-
-    const loadData = () => {
+    const loadData = useCallback(() => {
         const settings = getSettings();
         const currentProfiles = getCompanyProfiles();
         const currentActiveId = settings.activeProfileId;
@@ -33,22 +38,13 @@ export default function YourDetails() {
         setProfiles(currentProfiles);
         setActiveProfileId(currentActiveId);
 
-        // Select the active profile by default if nothing selected
-        if (!selectedProfileId) {
-            const active = currentProfiles.find(p => p.id === currentActiveId);
-            if (active) {
-                setSelectedProfileId(active.id);
-                setFormData(active);
-            } else if (currentProfiles.length > 0) {
-                setSelectedProfileId(currentProfiles[0].id);
-                setFormData(currentProfiles[0]);
-            }
-        } else {
-            // Refresh selected profile data
-            const selected = currentProfiles.find(p => p.id === selectedProfileId);
-            if (selected) setFormData(selected);
-        }
-    };
+        setSelectedProfileId((prevId) => {
+            const targetId = prevId || currentActiveId || currentProfiles[0]?.id || null;
+            const targetProfile = currentProfiles.find(p => p.id === targetId) || null;
+            setFormData(targetProfile);
+            return targetId;
+        });
+    }, []);
 
     const selectProfile = (id) => {
         const profile = profiles.find(p => p.id === id);

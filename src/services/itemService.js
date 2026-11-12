@@ -164,17 +164,14 @@ export const exportItemsToJSON = () => {
         const blob = new Blob([jsonString], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
 
-        // Create download link
         const link = document.createElement('a');
         link.href = url;
         const timestamp = new Date().toISOString().split('T')[0];
         link.download = `items_backup_${timestamp}.json`;
 
-        // Trigger download
         document.body.appendChild(link);
         link.click();
 
-        // Cleanup
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
     } catch (error) {
@@ -210,21 +207,20 @@ export const importItemsFromJSON = (jsonData) => {
             }
         }
 
-        // Get existing items
         const existingItems = getAllItems();
-
-        // Merge imported items (avoiding duplicates by name)
         let importedCount = 0;
-        importedItems.forEach(importedItem => {
-            const { id, createdAt, updatedAt, ...cleanItemData } = importedItem;
 
-            // Check if item with same name exists
+        importedItems.forEach(importedItem => {
+            const cleanItemData = { ...importedItem };
+            delete cleanItemData.id;
+            delete cleanItemData.createdAt;
+            delete cleanItemData.updatedAt;
+
             const existingIndex = existingItems.findIndex(
                 e => e.name.toLowerCase().trim() === cleanItemData.name.toLowerCase().trim()
             );
 
             if (existingIndex !== -1) {
-                // Update existing item
                 existingItems[existingIndex] = {
                     ...existingItems[existingIndex],
                     ...cleanItemData,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useMemo, useCallback } from 'react';
 import { Users, Plus, Search, Edit2, Trash2, X, Save, Mail, Phone, MapPin, FileText, Download, Upload } from 'lucide-react';
 import { getAllClients, saveClient, deleteClient, createEmptyClient, exportClientsToJSON, importClientsFromJSON } from '../services/clientService';
 import { getSettings } from '../services/settingsService';
@@ -6,7 +6,7 @@ import { validateGST, validateEmail, validatePhone } from '../utils/validation';
 import { useToast } from '../components/Toast';
 
 export default function Clients() {
-    const [clients, setClients] = useState([]);
+    const [clients, setClients] = useState(() => getAllClients());
     const [searchQuery, setSearchQuery] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingClient, setEditingClient] = useState(null);
@@ -15,20 +15,19 @@ export default function Clients() {
     const { addToast } = useToast();
     const fileInputRef = useRef(null);
 
-    useEffect(() => {
-        loadClients();
+    const loadClients = useCallback(() => {
+        setClients(getAllClients());
     }, []);
 
-    const loadClients = () => {
-        const allClients = getAllClients();
-        setClients(allClients);
-    };
-
-    const filteredClients = clients.filter(client =>
-        client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        client.mobile.includes(searchQuery) ||
-        (client.email && client.email.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    const filteredClients = useMemo(() => {
+        const query = searchQuery.toLowerCase().trim();
+        if (!query) return clients;
+        return clients.filter(client =>
+            (client.name && client.name.toLowerCase().includes(query)) ||
+            (client.mobile && client.mobile.includes(query)) ||
+            (client.email && client.email.toLowerCase().includes(query))
+        );
+    }, [clients, searchQuery]);
 
     const handleOpenModal = (client = null) => {
         if (client) {
@@ -105,7 +104,7 @@ export default function Clients() {
         try {
             exportClientsToJSON();
             addToast('Clients exported successfully!', 'success');
-        } catch (error) {
+        } catch {
             addToast('Failed to export clients', 'error');
         }
     };

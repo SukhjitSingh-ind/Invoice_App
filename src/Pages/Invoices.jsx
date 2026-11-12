@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Printer, Trash2, Plus, FileText, CheckCircle, XCircle } from 'lucide-react';
 import { getAllInvoices, deleteInvoice, saveInvoice } from '../services/invoiceService';
@@ -6,19 +6,15 @@ import { getInvoiceTotal, calculateInvoiceTotals } from '../utils/invoiceCalcula
 
 export default function Invoices() {
     const navigate = useNavigate();
-    const [invoices, setInvoices] = useState([]);
+    const [invoices, setInvoices] = useState(() => getAllInvoices());
     const [searchTerm, setSearchTerm] = useState('');
     const [minPrice, setMinPrice] = useState('');
     const [maxPrice, setMaxPrice] = useState('');
     const [deleteConfirm, setDeleteConfirm] = useState(null);
 
-    useEffect(() => {
-        loadInvoices();
-    }, []);
-
-    const loadInvoices = () => {
+    const loadInvoices = useCallback(() => {
         setInvoices(getAllInvoices());
-    };
+    }, []);
 
     const handleDelete = (id, e) => {
         e.stopPropagation();
@@ -52,24 +48,25 @@ export default function Invoices() {
         loadInvoices();
     };
 
-    const calculateTotal = (inv) => getInvoiceTotal(inv);
-
-    const filteredInvoices = invoices.filter(inv => {
-        const total = calculateTotal(inv);
-        const term = searchTerm.toLowerCase();
-        const matchesTerm = (
-            (inv.recipient.name || '').toLowerCase().includes(term) ||
-            (inv.number || '').toLowerCase().includes(term) ||
-            total.toString().includes(term)
-        );
-
+    const filteredInvoices = useMemo(() => {
+        const term = searchTerm.toLowerCase().trim();
         const min = parseFloat(minPrice);
         const max = parseFloat(maxPrice);
-        const matchesMin = !isNaN(min) ? total >= min : true;
-        const matchesMax = !isNaN(max) ? total <= max : true;
 
-        return matchesTerm && matchesMin && matchesMax;
-    });
+        return invoices.filter(inv => {
+            const total = getInvoiceTotal(inv);
+            const matchesTerm = !term || (
+                (inv.recipient?.name || '').toLowerCase().includes(term) ||
+                (inv.number || '').toLowerCase().includes(term) ||
+                total.toString().includes(term)
+            );
+
+            const matchesMin = !isNaN(min) ? total >= min : true;
+            const matchesMax = !isNaN(max) ? total <= max : true;
+
+            return matchesTerm && matchesMin && matchesMax;
+        });
+    }, [invoices, searchTerm, minPrice, maxPrice]);
 
     return (
         <div className="p-8">
@@ -138,7 +135,7 @@ export default function Invoices() {
             ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredInvoices.map((inv) => {
-                        const total = calculateTotal(inv);
+                        const total = getInvoiceTotal(inv);
                         const isPaid = (inv.received || 0) >= total;
 
                         return (

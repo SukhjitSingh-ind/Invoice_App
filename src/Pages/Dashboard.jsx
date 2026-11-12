@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, FileText, ArrowUpRight, DollarSign, Users } from 'lucide-react';
 import { getAllInvoices } from '../services/invoiceService';
@@ -7,55 +7,43 @@ import { getActiveProfile } from '../services/settingsService';
 
 export default function Dashboard() {
     const navigate = useNavigate();
-    const [invoices, setInvoices] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [activeProfile, setActiveProfile] = useState(null);
+    const [invoices] = useState(() => getAllInvoices());
+    const [activeProfile] = useState(() => getActiveProfile());
 
-    useEffect(() => {
-        loadInvoices();
-        const profile = getActiveProfile();
-        setActiveProfile(profile);
-    }, []);
+    const { totalAmount, clientDebtsArray, totalOutstanding, recentInvoices } = useMemo(() => {
+        const totalAmount = invoices.reduce((sum, inv) => {
+            const { total } = calculateInvoiceTotals(inv);
+            return sum + total;
+        }, 0);
 
-    const loadInvoices = () => {
-        const data = getAllInvoices();
-        setInvoices(data);
-        setLoading(false);
-    };
+        const clientDebts = {};
+        invoices.forEach(inv => {
+            const clientName = inv.recipient?.name || 'Unnamed Client';
+            const { total, balance } = calculateInvoiceTotals(inv);
+            const received = inv.received || 0;
+            const unpaid = Math.max(0, balance);
+            const paid = Math.min(total, received);
 
-    const totalAmount = invoices.reduce((sum, inv) => {
-        const { total } = calculateInvoiceTotals(inv);
-        return sum + total;
-    }, 0);
+            if (!clientDebts[clientName]) {
+                clientDebts[clientName] = { total: 0, paid: 0, count: 0, clientName };
+            }
 
-    // Calculate paid and unpaid balances per client
-    const clientDebts = {};
-    invoices.forEach(inv => {
-        const clientName = inv.recipient.name;
-        const { total, balance } = calculateInvoiceTotals(inv);
-        const received = inv.received || 0;
-        const unpaid = Math.max(0, balance);
-        const paid = Math.min(total, received);
+            clientDebts[clientName].total += unpaid;
+            clientDebts[clientName].paid += paid;
+            if (unpaid > 0) {
+                clientDebts[clientName].count += 1;
+            }
+        });
 
-        if (!clientDebts[clientName]) {
-            clientDebts[clientName] = { total: 0, paid: 0, count: 0, clientName };
-        }
+        const clientDebtsArray = Object.values(clientDebts)
+            .filter(c => c.total > 0 || c.paid > 0)
+            .sort((a, b) => b.total - a.total);
 
-        clientDebts[clientName].total += unpaid;
-        clientDebts[clientName].paid += paid;
-        if (unpaid > 0) {
-            clientDebts[clientName].count += 1;
-        }
-    });
+        const totalOutstanding = clientDebtsArray.reduce((sum, c) => sum + c.total, 0);
+        const recentInvoices = invoices.slice(0, 5);
 
-    // Convert to array and sort by debt amount (highest first)
-    const clientDebtsArray = Object.values(clientDebts)
-        .filter(c => c.total > 0 || c.paid > 0) // Show all clients with activity
-        .sort((a, b) => b.total - a.total);
-
-    const totalOutstanding = clientDebtsArray.reduce((sum, c) => sum + c.total, 0);
-
-    const recentInvoices = invoices.slice(0, 5); // Only show top 5
+        return { totalAmount, clientDebtsArray, totalOutstanding, recentInvoices };
+    }, [invoices]);
 
     return (
         <div className="p-8">

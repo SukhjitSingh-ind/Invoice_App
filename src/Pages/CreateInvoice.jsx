@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Plus,
@@ -44,10 +44,9 @@ export default function CreateInvoice() {
     const [formData, setFormData] = useState(createEmptyClient());
     const { addToast } = useToast();
 
-    const loadClients = () => {
-        const allClients = getAllClients();
-        setClients(allClients);
-    };
+    const loadClients = useCallback(() => {
+        setClients(getAllClients());
+    }, []);
 
     const handleSearchChange = (e) => {
         setSearchQuery(e.target.value);

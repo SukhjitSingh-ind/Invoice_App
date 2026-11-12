@@ -1,4 +1,3 @@
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
@@ -9,6 +8,7 @@ const testFiles = [
     './utils/invoiceCalculations.test.js',
     './utils/numberToWords.test.js',
     './utils/validation.test.js',
+    './utils/templates.test.js',
     './utils/clientHelpers.test.js'
 ];
 

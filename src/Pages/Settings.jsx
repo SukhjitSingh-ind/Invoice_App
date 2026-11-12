@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Save, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { getSettings, updateSettings, resetSettings } from '../services/settingsService';
 import { exportInvoices, importInvoices } from '../services/invoiceService';
@@ -8,14 +8,9 @@ import { exportFullBackup, importFullBackup } from '../services/backupService';
 import { useToast } from '../components/Toast';
 
 export default function Settings() {
-    const [settings, setSettings] = useState(null);
+    const [settings, setSettings] = useState(() => getSettings());
     const [saved, setSaved] = useState(false);
     const { addToast } = useToast();
-
-    useEffect(() => {
-        const currentSettings = getSettings();
-        setSettings(currentSettings);
-    }, []);
 
     if (!settings) return <div>Loading...</div>;
 
@@ -348,7 +343,7 @@ export default function Settings() {
                                     try {
                                         exportClientsToJSON();
                                         addToast('Clients exported successfully!', 'success');
-                                    } catch (e) {
+                                    } catch {
                                         addToast('Failed to export clients', 'error');
                                     }
                                 }}
@@ -376,7 +371,7 @@ export default function Settings() {
                                     try {
                                         exportItemsToJSON();
                                         addToast('Items exported successfully!', 'success');
-                                    } catch (e) {
+                                    } catch {
                                         addToast('Failed to export items', 'error');
                                     }
                                 }}
