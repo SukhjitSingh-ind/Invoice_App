@@ -44,3 +44,4 @@ assert(nullFallback && nullFallback.id === 'default', 'Null template ID should s
 
 console.log(`\nTests Completed: ${passed} Passed, ${failed} Failed`);
 if (failed > 0) process.exit(1);
+

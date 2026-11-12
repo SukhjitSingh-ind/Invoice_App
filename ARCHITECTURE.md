@@ -135,3 +135,4 @@ Re-render with memoized aggregations (useMemo)
 - **Multi-Tenant Remote Sync**: The service layer (`src/services/`) can be adapted to call REST or GraphQL APIs with zero changes required to presentation components.
 - **Custom Fonts**: Additional regional typography can be incorporated by registering CSS font rules in `index.css` and mapping font classes in `src/utils/templates.js`.
 - **E-Way Bill & E-Invoice Integration**: The domain model is aligned with Indian NIC E-Invoice JSON schema requirements, making automated API submission a natural next step.
+
