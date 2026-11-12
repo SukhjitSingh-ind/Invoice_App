@@ -15,7 +15,7 @@ const testFiles = [
 async function runTests() {
     for (const file of testFiles) {
         console.log(`\n--- Running ${file} ---`);
-        const p = spawn('node', [path.join(__dirname, file)], { stdio: 'inherit' });
+        const p = spawn('node', ['--experimental-strip-types', path.join(__dirname, file)], { stdio: 'inherit' });
 
         await new Promise((resolve) => {
             p.on('close', (code) => {
