@@ -29,7 +29,7 @@ export interface InvoiceCustomization {
 export type DiscountType = 'fixed' | 'percentage';
 
 export interface Invoice {
-  id: number;
+  id: number | string;
   number: string;
   date: string;
   sender: InvoiceParty;

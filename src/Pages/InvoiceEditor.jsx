@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { Plus, Trash2, ChevronRight, Eye, Save, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Package } from 'lucide-react';
-import { getInvoice, saveInvoice, createEmptyInvoice, getNextInvoiceNumber, checkInvoiceNumberExists } from '../services/invoiceService';
+import { getInvoice, saveInvoice, createEmptyInvoice, getNextInvoiceNumber, checkInvoiceNumberExists, migrateInvoiceRecord } from '../services/invoiceService';
 import { getSettings, getActiveProfile } from '../services/settingsService';
 import { getClient, upsertClient } from '../services/clientService';
 import { getAllItems } from '../services/itemService';
@@ -24,10 +24,10 @@ export default function InvoiceEditor() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const templateId = searchParams.get('template');
   const clientId = searchParams.get('clientId');
-  const hasGstParam = searchParams.get('IsGST') === 'true';
+  const hasGstParam = searchParams.get('IsGST') === 'true' || searchParams.get('gst') === 'true';
 
   const [settings] = useState(() => getSettings());
   const [libraryItems] = useState(() => getAllItems());
@@ -63,7 +63,8 @@ export default function InvoiceEditor() {
     }
 
     if (imported) {
-      return imported;
+      const { migrated } = migrateInvoiceRecord(imported);
+      return migrated;
     }
 
     const newInv = createEmptyInvoice();
@@ -122,6 +123,36 @@ export default function InvoiceEditor() {
       navigate('/');
     }
   }, [id, invoice, navigate]);
+
+  // Handle legacy URL param transition: ?gst=true -> ?IsGST=true
+  useEffect(() => {
+    if (searchParams.has('gst')) {
+      const val = searchParams.get('gst');
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('gst');
+      if (val === 'true') {
+        newParams.set('IsGST', 'true');
+      }
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  // Synchronize URL IsGST parameter when creating a new invoice
+  const isInvoiceGst = invoice?.IsGST === true;
+  useEffect(() => {
+    if (id === 'new') {
+      const currentParam = searchParams.get('IsGST');
+      if (isInvoiceGst && currentParam !== 'true') {
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('IsGST', 'true');
+        setSearchParams(newParams, { replace: true });
+      } else if (!isInvoiceGst && currentParam === 'true') {
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('IsGST');
+        setSearchParams(newParams, { replace: true });
+      }
+    }
+  }, [id, isInvoiceGst, searchParams, setSearchParams]);
 
   if (!invoice || !settings) return <div>Loading...</div>;
 
@@ -335,6 +366,12 @@ export default function InvoiceEditor() {
   const handleChangeWrapper = (section, field, value) => {
     if (section === 'IsIGST') {
       setInvoice(prev => ({ ...prev, IsIGST: value }));
+    } else if (section === 'IsGST') {
+      setInvoice(prev => ({
+        ...prev,
+        IsGST: value,
+        IsIGST: value ? prev.IsIGST : false
+      }));
     } else if (section === 'placeOfSupply') {
       setInvoice(prev => ({ ...prev, placeOfSupply: value }));
     } else if (section === 'number') {

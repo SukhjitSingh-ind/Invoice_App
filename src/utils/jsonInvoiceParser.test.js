@@ -5,6 +5,8 @@ import {
     getSampleInvoiceJson
 } from './jsonInvoiceParser.js';
 import { calculateInvoiceTotals } from './invoiceCalculations.js';
+import { generateUniqueInvoiceId } from './idGenerator.js';
+import { migrateInvoiceRecord } from '../services/invoiceService.js';
 
 console.log('Running JSON Invoice Parser Tests (Single Agreed Property Names)...');
 
@@ -379,6 +381,161 @@ const parseRemovedProperties = parseAndValidateInvoiceJson(JSON.stringify({
 }));
 assert(parseRemovedProperties.extractedInvoice.IsGST === false, 'Unknown properties are ignored; IsGST defaults to false');
 assert(parseRemovedProperties.extractedInvoice.IsIGST === false, 'IsIGST is false');
+
+// ==========================================
+// 6. LEGACY GST CONTRACT MIGRATION TESTS
+// ==========================================
+
+console.log('\nRunning Legacy GST Contract Migration Tests...');
+
+// Test 6.1: Migrate legacy isGST: true -> IsGST: true, delete old property
+const legacyGstTrueRecord = {
+    id: 101,
+    number: 'INV-LEGACY-01',
+    isGST: true,
+    isIGST: false,
+    items: []
+};
+const { migrated: mig1, wasModified: mod1 } = migrateInvoiceRecord(legacyGstTrueRecord);
+assert(mod1 === true, 'Migration flagged wasModified = true for legacy isGST: true');
+assert(mig1.IsGST === true, 'isGST: true migrated to canonical IsGST: true');
+assert(mig1.IsIGST === false, 'isIGST: false migrated to canonical IsIGST: false');
+assert(!Object.prototype.hasOwnProperty.call(mig1, 'isGST'), 'Legacy isGST property strictly removed');
+assert(!Object.prototype.hasOwnProperty.call(mig1, 'isIGST'), 'Legacy isIGST property strictly removed');
+
+// Test 6.2: Migrate legacy isGST: false -> IsGST: false (explicit false preserved!)
+const legacyGstFalseRecord = {
+    id: 102,
+    number: 'INV-LEGACY-02',
+    isGST: false,
+    items: []
+};
+const { migrated: mig2, wasModified: mod2 } = migrateInvoiceRecord(legacyGstFalseRecord);
+assert(mod2 === true, 'Migration flagged wasModified = true for legacy isGST: false');
+assert(mig2.IsGST === false, 'Explicit isGST: false strictly preserved as IsGST: false');
+assert(mig2.IsIGST === false, 'IsIGST defaulted to false');
+assert(!Object.prototype.hasOwnProperty.call(mig2, 'isGST'), 'Legacy isGST property strictly removed');
+
+// Test 6.3: Migrate legacy isIGST: true when isGST is true
+const legacyIgstTrueRecord = {
+    id: 103,
+    number: 'INV-LEGACY-03',
+    isGST: true,
+    isIGST: true,
+    items: []
+};
+const { migrated: mig3, wasModified: mod3 } = migrateInvoiceRecord(legacyIgstTrueRecord);
+assert(mod3 === true, 'Migration flagged wasModified = true');
+assert(mig3.IsGST === true, 'IsGST is true');
+assert(mig3.IsIGST === true, 'isIGST: true migrated to IsIGST: true');
+assert(!Object.prototype.hasOwnProperty.call(mig3, 'isIGST'), 'Legacy isIGST property deleted');
+
+// Test 6.4: Invariant - if isGST is false, legacy isIGST: true must resolve to IsIGST: false
+const legacyContradictoryRecord = {
+    id: 104,
+    number: 'INV-LEGACY-04',
+    isGST: false,
+    isIGST: true,
+    items: []
+};
+const { migrated: mig4 } = migrateInvoiceRecord(legacyContradictoryRecord);
+assert(mig4.IsGST === false, 'IsGST is false');
+assert(mig4.IsIGST === false, 'Invariant enforced: IsIGST forced to false because IsGST is false');
+
+// Test 6.5: Idempotency - already migrated record is not modified
+const modernRecord = {
+    id: 105,
+    number: 'INV-MODERN-01',
+    IsGST: true,
+    IsIGST: true,
+    items: []
+};
+const { migrated: mig5, wasModified: mod5 } = migrateInvoiceRecord(modernRecord);
+assert(mod5 === false, 'Already migrated record has wasModified = false');
+assert(mig5.IsGST === true && mig5.IsIGST === true, 'Modern record properties preserved intact');
+
+// ==========================================
+// 7. INVOICE ID GENERATION & COLLISION TESTS
+// ==========================================
+
+console.log('\nRunning Unique Invoice ID & Collision Prevention Tests...');
+
+// Test 7.1: Rapid generation of 1,000 unique IDs produces 0 collisions
+const ID_SAMPLE_SIZE = 1000;
+const generatedIds = new Set();
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+let allMatchUuidV4 = true;
+for (let i = 0; i < ID_SAMPLE_SIZE; i++) {
+    const newId = generateUniqueInvoiceId();
+    generatedIds.add(newId);
+    if (!uuidRegex.test(newId)) {
+        allMatchUuidV4 = false;
+    }
+}
+
+assert(generatedIds.size === ID_SAMPLE_SIZE, `Generated ${ID_SAMPLE_SIZE} IDs with 0 collisions (Set size: ${generatedIds.size})`);
+assert(allMatchUuidV4 === true, 'All generated IDs strictly conform to RFC 4122 v4 UUID format');
+
+// Test 7.2: resolveInvoiceData generates unique UUID when data.id is omitted
+const resolvedWithoutId = resolveInvoiceData({
+    extractedData: {
+        invoiceNumber: 'INV-ID-TEST-1',
+        items: [{ description: 'Test', price: 100 }]
+    }
+});
+assert(typeof resolvedWithoutId.invoice.id === 'string', 'Generated invoice ID is a string');
+assert(uuidRegex.test(resolvedWithoutId.invoice.id), 'Generated invoice ID is a valid RFC 4122 v4 UUID');
+
+// Test 7.3: resolveInvoiceData preserves existing numeric ID (legacy backward-compatibility)
+const legacyNumericId = 1714567890123;
+const resolvedWithNumericId = resolveInvoiceData({
+    extractedData: {
+        id: legacyNumericId,
+        invoiceNumber: 'INV-ID-TEST-2',
+        items: [{ description: 'Test', price: 100 }]
+    }
+});
+assert(resolvedWithNumericId.invoice.id === legacyNumericId, 'Existing numeric ID is strictly preserved');
+
+// Test 7.4: resolveInvoiceData preserves existing string/UUID ID (editing/re-resolving)
+const existingUuidId = '550e8400-e29b-41d4-a716-446655440000';
+const resolvedWithUuidId = resolveInvoiceData({
+    extractedData: {
+        id: existingUuidId,
+        invoiceNumber: 'INV-ID-TEST-3',
+        items: [{ description: 'Test', price: 100 }]
+    }
+});
+assert(resolvedWithUuidId.invoice.id === existingUuidId, 'Existing string/UUID ID is strictly preserved');
+
+// ==========================================
+// 8. URL PARAMETER SYNCHRONIZATION TESTS
+// ==========================================
+
+console.log('\nRunning URL Parameter Synchronization Tests...');
+
+// Test 8.1: Simulation of legacy URL transition ?gst=true -> ?IsGST=true
+const simulateUrlTransition = (paramsString) => {
+    const params = new URLSearchParams(paramsString);
+    if (params.has('gst')) {
+        const val = params.get('gst');
+        params.delete('gst');
+        if (val === 'true') {
+            params.set('IsGST', 'true');
+        }
+    }
+    return params.toString();
+};
+
+const legacyUrl1 = simulateUrlTransition('template=corporate&gst=true&clientId=5');
+assert(legacyUrl1.includes('IsGST=true'), 'Transitioned ?gst=true to ?IsGST=true');
+assert(!legacyUrl1.includes('gst='), 'Removed legacy gst parameter');
+assert(legacyUrl1.includes('template=corporate') && legacyUrl1.includes('clientId=5'), 'Preserved other search params');
+
+const legacyUrl2 = simulateUrlTransition('template=corporate&gst=false');
+assert(!legacyUrl2.includes('IsGST'), 'gst=false does not set IsGST=true');
+assert(!legacyUrl2.includes('gst='), 'Removed legacy gst=false parameter');
 
 console.log(`\nTests Completed: ${passed} Passed, ${failed} Failed`);
 if (failed > 0) process.exit(1);

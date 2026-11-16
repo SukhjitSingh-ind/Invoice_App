@@ -57,6 +57,7 @@ export interface RawJsonInvoice {
  * Exactly matches domain properties with no redundant aliases.
  */
 export interface NormalizedInvoice {
+  id?: number | string;
   invoiceNumber: string;
   issueDate: string;
   dueDate?: string;

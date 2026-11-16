@@ -1,5 +1,7 @@
 // Centralized full app backup & restore (invoices, clients, items, settings)
 
+import { migrateInvoiceRecord } from './invoiceService.js';
+
 const INVOICE_KEY = 'invoice_app_data';
 const CLIENT_KEY = 'invoice_app_clients';
 const ITEM_KEY = 'invoice_app_items';
@@ -93,8 +95,10 @@ export function importFullBackup(jsonData) {
       throw new Error('Invalid backup file: items must be an array');
     }
 
-    // Very lightweight schema checks to avoid obviously broken imports
-    const safeInvoices = invoices.filter((inv) => inv && (inv.id != null) && typeof inv.number === 'string');
+    // Very lightweight schema checks to avoid obviously broken imports, and migrate legacy GST flags
+    const safeInvoices = invoices
+      .filter((inv) => inv && (inv.id != null) && typeof inv.number === 'string')
+      .map((inv) => migrateInvoiceRecord(inv).migrated);
     const safeClients = clients.filter((c) => c && typeof c.name === 'string');
     const safeItems = items.filter((it) => it && typeof it.name === 'string');
 

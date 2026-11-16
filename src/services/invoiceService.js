@@ -1,5 +1,50 @@
-import { getActiveProfile } from './settingsService';
+import { getActiveProfile } from './settingsService.js';
+import { generateUniqueInvoiceId } from '../utils/idGenerator.js';
+
 const STORAGE_KEY = 'invoice_app_data';
+
+/**
+ * Migrates a single invoice record to the standardized IsGST / IsIGST contract:
+ * - Detects existing records containing legacy 'isGST' or 'isIGST'.
+ * - Renames them to canonical 'IsGST' and 'IsIGST'.
+ * - Preserves original boolean values, including explicit false.
+ * - Removes old property names after migration.
+ *
+ * @param {object} inv - Invoice record
+ * @returns {{ migrated: object, wasModified: boolean }}
+ */
+export const migrateInvoiceRecord = (inv) => {
+    if (!inv || typeof inv !== 'object') return { migrated: inv, wasModified: false };
+
+    let wasModified = false;
+    const migrated = { ...inv };
+
+    // Migrate isGST -> IsGST
+    if (Object.prototype.hasOwnProperty.call(migrated, 'isGST')) {
+        if (!Object.prototype.hasOwnProperty.call(migrated, 'IsGST')) {
+            migrated.IsGST = Boolean(migrated.isGST);
+        }
+        delete migrated.isGST;
+        wasModified = true;
+    } else if (!Object.prototype.hasOwnProperty.call(migrated, 'IsGST')) {
+        migrated.IsGST = false;
+        wasModified = true;
+    }
+
+    // Migrate isIGST -> IsIGST (meaningful only when IsGST is true)
+    if (Object.prototype.hasOwnProperty.call(migrated, 'isIGST')) {
+        if (!Object.prototype.hasOwnProperty.call(migrated, 'IsIGST')) {
+            migrated.IsIGST = migrated.IsGST ? Boolean(migrated.isIGST) : false;
+        }
+        delete migrated.isIGST;
+        wasModified = true;
+    } else if (!Object.prototype.hasOwnProperty.call(migrated, 'IsIGST')) {
+        migrated.IsIGST = false;
+        wasModified = true;
+    }
+
+    return { migrated, wasModified };
+};
 
 // Default initial data to start with if storage is empty
 const INITIAL_DATA = [
@@ -27,7 +72,9 @@ const INITIAL_DATA = [
         currency: '₹',
         notes: 'Zoomlion Crane (80 Ton)',
         paymentInfo: '8141378031mokbizar',
-        template: 'default'
+        template: 'default',
+        IsGST: false,
+        IsIGST: false
     }
 ];
 
@@ -38,7 +85,22 @@ export const getAllInvoices = () => {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_DATA));
             return INITIAL_DATA;
         }
-        return JSON.parse(data);
+        const invoices = JSON.parse(data);
+        if (!Array.isArray(invoices)) return INITIAL_DATA;
+
+        let anyModified = false;
+        const migratedInvoices = invoices.map((inv) => {
+            const { migrated, wasModified } = migrateInvoiceRecord(inv);
+            if (wasModified) anyModified = true;
+            return migrated;
+        });
+
+        // Persist the migrated data if any legacy properties were found & converted
+        if (anyModified) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedInvoices));
+        }
+
+        return migratedInvoices;
     } catch (error) {
         console.error('Error loading invoices:', error);
         return INITIAL_DATA;
@@ -47,22 +109,21 @@ export const getAllInvoices = () => {
 
 export const getInvoice = (id) => {
     const invoices = getAllInvoices();
-    const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-    return invoices.find(inv => inv.id === numId);
+    return invoices.find((inv) => inv.id === id || String(inv.id) === String(id));
 };
 
 export const saveInvoice = (invoice) => {
     try {
         const invoices = getAllInvoices();
         if (invoice.id) {
-            const index = invoices.findIndex(inv => inv.id === invoice.id);
+            const index = invoices.findIndex((inv) => inv.id === invoice.id || String(inv.id) === String(invoice.id));
             if (index !== -1) {
                 invoices[index] = invoice;
             } else {
                 invoices.push(invoice);
             }
         } else {
-            invoice.id = Date.now();
+            invoice.id = generateUniqueInvoiceId();
             invoices.push(invoice);
         }
         localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
@@ -76,8 +137,7 @@ export const saveInvoice = (invoice) => {
 export const deleteInvoice = (id) => {
     try {
         let invoices = getAllInvoices();
-        const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-        invoices = invoices.filter(inv => inv.id !== numId);
+        invoices = invoices.filter((inv) => inv.id !== id && String(inv.id) !== String(id));
         localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
         return true;
     } catch (error) {
@@ -157,10 +217,17 @@ export const getNextInvoiceNumber = () => {
     const invoices = getAllInvoices();
     if (invoices.length === 0) return '1';
 
-    // Sort by integer ID (timestamp) descending to get truly latest created
-    const sorted = [...invoices].sort((a, b) => b.id - a.id);
+    // Sort descending by numeric ID or creation date to find latest invoice
+    const sorted = [...invoices].sort((a, b) => {
+        if (typeof a.id === 'number' && typeof b.id === 'number') {
+            return b.id - a.id;
+        }
+        const timeA = a.date ? new Date(a.date).getTime() : 0;
+        const timeB = b.date ? new Date(b.date).getTime() : 0;
+        return timeB - timeA;
+    });
     const lastInvoice = sorted[0];
-    const lastNumStr = lastInvoice.number || '';
+    const lastNumStr = lastInvoice?.number || '';
 
     // Try to match pattern ending in number: Prefix + Number
     // e.g. "INV-009" or "#9"
@@ -194,7 +261,7 @@ export const checkInvoiceNumberExists = (number, excludeId = null) => {
 
     return invoices.some(inv =>
         normalize(inv.number) === target &&
-        inv.id !== excludeId
+        (excludeId === null || (inv.id !== excludeId && String(inv.id) !== String(excludeId)))
     );
 };
 
@@ -231,10 +298,16 @@ export const importInvoices = (jsonData) => {
         let addedCount = 0;
         let updatedCount = 0;
 
-        newInvoices.forEach(newInv => {
-            if (!newInv.id || !newInv.number) return;
+        newInvoices.forEach(rawInv => {
+            if (!rawInv || typeof rawInv !== 'object' || !rawInv.number) return;
 
-            const index = currentInvoices.findIndex(inv => inv.id === newInv.id);
+            // Automatically migrate legacy GST flags on imported backup invoices
+            const { migrated: newInv } = migrateInvoiceRecord(rawInv);
+            if (!newInv.id) {
+                newInv.id = generateUniqueInvoiceId();
+            }
+
+            const index = currentInvoices.findIndex(inv => inv.id === newInv.id || String(inv.id) === String(newInv.id));
             if (index !== -1) {
                 // Upsert: Overwrite existing local record on restore
                 currentInvoices[index] = newInv;

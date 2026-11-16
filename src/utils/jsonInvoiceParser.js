@@ -1,4 +1,5 @@
 import { TEMPLATES } from './templates.js';
+import { generateUniqueInvoiceId } from './idGenerator.js';
 
 /**
  * Validates whether a template ID exists in the application's supported templates.
@@ -479,7 +480,7 @@ export function resolveInvoiceData({
     }
 
     const resolvedInvoice = {
-        id: Date.now(),
+        id: (data.id != null) ? data.id : generateUniqueInvoiceId(),
         number,
         date,
         sender: resolvedSender,
