@@ -11,6 +11,7 @@ const Items = lazy(() => import('./Pages/Items'));
 const Reports = lazy(() => import('./Pages/Reports'));
 const Help = lazy(() => import('./Pages/Help'));
 const CreateInvoice = lazy(() => import('./Pages/CreateInvoice'));
+const CreateInvoiceFromJson = lazy(() => import('./Pages/CreateInvoiceFromJson'));
 const InvoiceEditor = lazy(() => import('./Pages/InvoiceEditor'));
 const Settings = lazy(() => import('./Pages/Settings'));
 const YourDetails = lazy(() => import('./Pages/YourDetails'));
@@ -40,6 +41,8 @@ export default function App() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/help" element={<Help />} />
               <Route path="/create" element={<CreateInvoice />} />
+              <Route path="/create-json" element={<CreateInvoiceFromJson />} />
+              <Route path="/create-from-json" element={<CreateInvoiceFromJson />} />
               <Route path="/editor/new" element={<InvoiceEditor />} />
               <Route path="/edit/:id" element={<InvoiceEditor />} />
               <Route path="/settings" element={<Settings />} />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { Plus, Trash2, ChevronRight, Eye, Save, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Package } from 'lucide-react';
 import { getInvoice, saveInvoice, createEmptyInvoice, getNextInvoiceNumber, checkInvoiceNumberExists } from '../services/invoiceService';
 import { getSettings, getActiveProfile } from '../services/settingsService';
@@ -22,6 +22,7 @@ import InvoiceFooter from '../components/InvoiceEditor/InvoiceFooter';
 
 export default function InvoiceEditor() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const templateId = searchParams.get('template');
@@ -40,6 +41,31 @@ export default function InvoiceEditor() {
     if (id && id !== 'new') {
       return getInvoice(id) || null;
     }
+
+    // Check if an invoice was imported from JSON via state or backup storage
+    let imported = location.state?.importedInvoice;
+    if (!imported) {
+      try {
+        const stored = sessionStorage.getItem('pending_imported_invoice');
+        if (stored) {
+          imported = JSON.parse(stored);
+          sessionStorage.removeItem('pending_imported_invoice');
+        }
+      } catch (e) {
+        console.error('Failed to parse pending imported invoice:', e);
+      }
+    } else {
+      try {
+        sessionStorage.removeItem('pending_imported_invoice');
+      } catch (e) {
+        console.warn('Could not clear pending_imported_invoice:', e);
+      }
+    }
+
+    if (imported) {
+      return imported;
+    }
+
     const newInv = createEmptyInvoice();
     newInv.number = getNextInvoiceNumber();
     if (templateId) newInv.template = templateId;
@@ -79,6 +105,14 @@ export default function InvoiceEditor() {
     if (id && id !== 'new') {
       const data = getInvoice(id);
       return data?.customization || { backgroundColor: '', fontColor: '', backgroundImage: '' };
+    }
+    const importedCustomization = location.state?.importedInvoice?.customization;
+    if (importedCustomization) {
+      return {
+        backgroundColor: importedCustomization.backgroundColor || '',
+        fontColor: importedCustomization.fontColor || '',
+        backgroundImage: importedCustomization.backgroundImage || ''
+      };
     }
     return { backgroundColor: '', fontColor: '', backgroundImage: '' };
   });

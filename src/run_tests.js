@@ -9,7 +9,8 @@ const testFiles = [
     './utils/numberToWords.test.js',
     './utils/validation.test.js',
     './utils/templates.test.js',
-    './utils/clientHelpers.test.js'
+    './utils/clientHelpers.test.js',
+    './utils/jsonInvoiceParser.test.js'
 ];
 
 async function runTests() {

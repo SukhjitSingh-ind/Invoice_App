@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Printer, Trash2, Plus, FileText, CheckCircle, XCircle } from 'lucide-react';
+import { Search, Printer, Trash2, Plus, FileText, CheckCircle, XCircle, FileCode2 } from 'lucide-react';
 import { getAllInvoices, deleteInvoice, saveInvoice } from '../services/invoiceService';
 import { getInvoiceTotal, calculateInvoiceTotals } from '../utils/invoiceCalculations';
 
@@ -115,6 +115,13 @@ export default function Invoices() {
                             className="w-24 px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-sm"
                         />
                     </div>
+                    <button
+                        onClick={() => navigate('/create-json')}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors border border-slate-200"
+                        title="Create an invoice by pasting or uploading JSON"
+                    >
+                        <FileCode2 size={16} className="text-blue-600" /> From JSON
+                    </button>
                     <button
                         onClick={() => navigate('/create')}
                         className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20"

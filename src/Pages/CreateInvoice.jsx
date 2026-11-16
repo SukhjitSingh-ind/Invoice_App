@@ -16,7 +16,8 @@ import {
     RotateCcw,
     ChevronLeft,
     ChevronRight,
-    AlertCircle
+    AlertCircle,
+    FileCode2
 } from 'lucide-react';
 import { TEMPLATES } from '../utils/templates';
 import { getAllClients, saveClient, createEmptyClient } from '../services/clientService';
@@ -177,14 +178,25 @@ export default function CreateInvoice() {
     return (
         <div className="p-6 md:p-8 max-w-6xl mx-auto pb-16">
             {/* Page Header */}
-            <div className="mb-8">
-                <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">
-                    <span>Invoice Workflow</span>
-                    <span>•</span>
-                    <span>New Invoice Setup</span>
+            <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">
+                        <span>Invoice Workflow</span>
+                        <span>•</span>
+                        <span>New Invoice Setup</span>
+                    </div>
+                    <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">Create New Invoice</h1>
+                    <p className="text-slate-500 mt-1 text-base">Select a client and choose an invoice template to launch the editor.</p>
                 </div>
-                <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">Create New Invoice</h1>
-                <p className="text-slate-500 mt-1 text-base">Select a client and choose an invoice template to launch the editor.</p>
+                <button
+                    type="button"
+                    onClick={() => navigate('/create-json')}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all self-start sm:self-auto cursor-pointer border border-slate-200 shadow-sm"
+                    title="Import or paste JSON to populate an invoice"
+                >
+                    <FileCode2 size={16} className="text-blue-600" />
+                    <span>Create from JSON</span>
+                </button>
             </div>
 
             {/* STEP 1: Client Selection Section */}

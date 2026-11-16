@@ -5,3 +5,4 @@ export * from './item';
 export * from './settings';
 export * from './report';
 export * from './templates';
+export * from './jsonInvoice';

@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Link } from 'react-router-dom';
-import { LayoutDashboard, FilePlus, Receipt, Settings, Users, Package, BarChart3, HelpCircle, ChevronLeft, ChevronRight, Building2 } from 'lucide-react';
+import { LayoutDashboard, FilePlus, FileCode2, Receipt, Settings, Users, Package, BarChart3, HelpCircle, ChevronLeft, ChevronRight, Building2 } from 'lucide-react';
 import logoImg from '../assets/Logo_1_RB_HD.png';
 
 
@@ -12,6 +12,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
         { path: '/items', label: 'Items', icon: Package },
         { path: '/reports', label: 'Reports', icon: BarChart3 },
         { path: '/create', label: 'Create Invoice', icon: FilePlus },
+        { path: '/create-json', label: 'Create from JSON', icon: FileCode2 },
         { path: '/your-details', label: 'Your Details', icon: Building2 },
         { path: '/help', label: 'Help', icon: HelpCircle },
         { path: '/settings', label: 'Settings', icon: Settings },
