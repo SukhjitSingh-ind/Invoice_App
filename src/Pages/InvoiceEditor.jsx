@@ -27,7 +27,7 @@ export default function InvoiceEditor() {
   const [searchParams] = useSearchParams();
   const templateId = searchParams.get('template');
   const clientId = searchParams.get('clientId');
-  const isGSTParam = searchParams.get('gst') === 'true';
+  const hasGstParam = searchParams.get('IsGST') === 'true';
 
   const [settings] = useState(() => getSettings());
   const [libraryItems] = useState(() => getAllItems());
@@ -97,7 +97,7 @@ export default function InvoiceEditor() {
       }
     }
 
-    if (isGSTParam) newInv.isGST = true;
+    if (hasGstParam) newInv.IsGST = true;
     return newInv;
   });
 
@@ -163,12 +163,12 @@ export default function InvoiceEditor() {
     }
 
     // Validate GST Number
-    if (invoice.isGST && invoice.recipient.gstNumber && !validateGST(invoice.recipient.gstNumber)) {
+    if (invoice.IsGST && invoice.recipient.gstNumber && !validateGST(invoice.recipient.gstNumber)) {
       errors.gstNumber = 'Invalid GST Number format';
     }
 
     // Validate Seller GST Number
-    if (invoice.isGST && invoice.sender.gstNumber && !validateGST(invoice.sender.gstNumber)) {
+    if (invoice.IsGST && invoice.sender.gstNumber && !validateGST(invoice.sender.gstNumber)) {
       errors.sellerGstNumber = 'Invalid Seller GST Number format';
     }
 
@@ -333,8 +333,8 @@ export default function InvoiceEditor() {
   };
 
   const handleChangeWrapper = (section, field, value) => {
-    if (section === 'isIGST') {
-      setInvoice(prev => ({ ...prev, isIGST: value }));
+    if (section === 'IsIGST') {
+      setInvoice(prev => ({ ...prev, IsIGST: value }));
     } else if (section === 'placeOfSupply') {
       setInvoice(prev => ({ ...prev, placeOfSupply: value }));
     } else if (section === 'number') {

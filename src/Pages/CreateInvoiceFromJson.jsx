@@ -72,6 +72,9 @@ export default function CreateInvoiceFromJson() {
     // Template manual override state (null or empty string means not manually overridden)
     const [manualTemplateId, setManualTemplateId] = useState('');
 
+    // GST manual override state (null = use JSON/default; boolean = explicit user toggle)
+    const [manualIsGST, setManualIsGST] = useState(null);
+
     // Active company profile & settings
     const activeProfile = useMemo(() => getActiveProfile(), []);
     const nextInvoiceNumber = useMemo(() => getNextInvoiceNumber(), []);
@@ -109,11 +112,12 @@ export default function CreateInvoiceFromJson() {
             extractedData: parseResult.extractedInvoice,
             manualClient,
             manualTemplateId: manualTemplateId || null,
+            manualIsGST,
             defaultTemplateId: 'default',
             senderProfile: activeProfile,
             nextInvoiceNumberFallback: nextInvoiceNumber
         });
-    }, [parseResult.extractedInvoice, manualClient, manualTemplateId, activeProfile, nextInvoiceNumber]);
+    }, [parseResult.extractedInvoice, manualClient, manualTemplateId, manualIsGST, activeProfile, nextInvoiceNumber]);
 
     // 4. Calculate Live Totals for Summary Preview
     const invoiceTotals = useMemo(() => {
@@ -150,6 +154,7 @@ export default function CreateInvoiceFromJson() {
 
     const handleClearJson = () => {
         setJsonInput('');
+        setManualIsGST(null);
         addToast('JSON editor cleared.', 'info');
     };
 
@@ -643,11 +648,10 @@ export default function CreateInvoiceFromJson() {
                                                     handleSelectClient(client.id);
                                                 }
                                             }}
-                                            className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between text-left group ${
-                                                isSelected
+                                            className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between text-left group ${isSelected
                                                     ? 'border-2 border-blue-600 bg-blue-50/40 shadow-sm ring-2 ring-blue-500/20'
                                                     : 'border-slate-200 bg-white hover:border-blue-300 hover:shadow-sm'
-                                            }`}
+                                                }`}
                                         >
                                             <div className="flex items-start justify-between gap-2 mb-2">
                                                 <div className="flex items-center gap-2.5 min-w-0">
@@ -703,9 +707,8 @@ export default function CreateInvoiceFromJson() {
                                         type="button"
                                         disabled={!hasPrevPage}
                                         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border font-medium ${
-                                            hasPrevPage ? 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200' : 'bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed'
-                                        }`}
+                                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border font-medium ${hasPrevPage ? 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200' : 'bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed'
+                                            }`}
                                     >
                                         <ChevronLeft size={14} /> Prev
                                     </button>
@@ -719,9 +722,8 @@ export default function CreateInvoiceFromJson() {
                                                     key={p}
                                                     type="button"
                                                     onClick={() => setCurrentPage(Number(p))}
-                                                    className={`w-7 h-7 rounded-lg font-bold text-xs ${
-                                                        page === p ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'
-                                                    }`}
+                                                    className={`w-7 h-7 rounded-lg font-bold text-xs ${page === p ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'
+                                                        }`}
                                                 >
                                                     {p}
                                                 </button>
@@ -733,9 +735,8 @@ export default function CreateInvoiceFromJson() {
                                         type="button"
                                         disabled={!hasNextPage}
                                         onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border font-medium ${
-                                            hasNextPage ? 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200' : 'bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed'
-                                        }`}
+                                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border font-medium ${hasNextPage ? 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200' : 'bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed'
+                                            }`}
                                     >
                                         Next <ChevronRight size={14} />
                                     </button>
@@ -805,11 +806,10 @@ export default function CreateInvoiceFromJson() {
                                         handleSelectTemplate(tmpl.id);
                                     }
                                 }}
-                                className={`rounded-xl overflow-hidden border text-left cursor-pointer transition-all flex flex-col justify-between group ${
-                                    isSelected
+                                className={`rounded-xl overflow-hidden border text-left cursor-pointer transition-all flex flex-col justify-between group ${isSelected
                                         ? 'border-2 border-blue-600 shadow-md ring-2 ring-blue-500/20 -translate-y-0.5'
                                         : 'border-slate-200 bg-white hover:border-blue-300 hover:shadow-sm'
-                                }`}
+                                    }`}
                             >
                                 <div>
                                     <div className={`h-14 ${tmpl.previewColor} w-full relative flex items-center justify-center`}>
@@ -853,11 +853,34 @@ export default function CreateInvoiceFromJson() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        {resolvedData.invoice.isGST && (
-                            <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold uppercase tracking-wider">
-                                GST Enabled
-                            </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors">
+                            <input
+                                type="checkbox"
+                                checked={resolvedData.invoice.IsGST}
+                                onChange={(e) => setManualIsGST(e.target.checked)}
+                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                            />
+                            <span className="text-xs font-bold text-slate-700">GST Invoice</span>
+                            {resolvedData.invoice.IsGST ? (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-600 text-white uppercase">
+                                    Enabled
+                                </span>
+                            ) : (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 uppercase">
+                                    Disabled (Default)
+                                </span>
+                            )}
+                        </label>
+                        {manualIsGST !== null && (
+                            <button
+                                type="button"
+                                onClick={() => setManualIsGST(null)}
+                                className="text-[11px] text-slate-500 hover:text-slate-700 underline cursor-pointer ml-1"
+                                title="Revert to JSON's IsGST value"
+                            >
+                                Reset to JSON
+                            </button>
                         )}
                     </div>
                 </div>
@@ -913,10 +936,10 @@ export default function CreateInvoiceFromJson() {
                                     <tr>
                                         <th className="py-2.5 px-3">#</th>
                                         <th className="py-2.5 px-3">Description</th>
-                                        {resolvedData.invoice.isGST && <th className="py-2.5 px-3 text-center">HSN/SAC</th>}
+                                        {resolvedData.invoice.IsGST && <th className="py-2.5 px-3 text-center">HSN/SAC</th>}
                                         <th className="py-2.5 px-3 text-center">Qty</th>
                                         <th className="py-2.5 px-3 text-right">Rate</th>
-                                        {resolvedData.invoice.isGST && <th className="py-2.5 px-3 text-center">GST %</th>}
+                                        {resolvedData.invoice.IsGST && <th className="py-2.5 px-3 text-center">GST %</th>}
                                         <th className="py-2.5 px-3 text-right">Amount</th>
                                     </tr>
                                 </thead>
@@ -925,12 +948,12 @@ export default function CreateInvoiceFromJson() {
                                         <tr key={item.id || idx} className="hover:bg-slate-50/50">
                                             <td className="py-2 px-3 text-slate-400 font-mono">{idx + 1}</td>
                                             <td className="py-2 px-3 font-semibold text-slate-800">{item.description}</td>
-                                            {resolvedData.invoice.isGST && (
+                                            {resolvedData.invoice.IsGST && (
                                                 <td className="py-2 px-3 text-center text-slate-500 font-mono">{item.hsnSac || '—'}</td>
                                             )}
                                             <td className="py-2 px-3 text-center text-slate-700">{item.quantity}</td>
                                             <td className="py-2 px-3 text-right text-slate-700">₹{item.price.toLocaleString('en-IN')}</td>
-                                            {resolvedData.invoice.isGST && (
+                                            {resolvedData.invoice.IsGST && (
                                                 <td className="py-2 px-3 text-center text-slate-500">{item.gstRate ?? 18}%</td>
                                             )}
                                             <td className="py-2 px-3 text-right font-bold text-slate-900">
@@ -941,17 +964,17 @@ export default function CreateInvoiceFromJson() {
                                 </tbody>
                                 <tfoot className="bg-slate-50/80 font-bold border-t border-slate-200">
                                     <tr>
-                                        <td colSpan={resolvedData.invoice.isGST ? 6 : 4} className="py-2 px-3 text-right text-slate-600">
+                                        <td colSpan={resolvedData.invoice.IsGST ? 6 : 4} className="py-2 px-3 text-right text-slate-600">
                                             Subtotal:
                                         </td>
                                         <td className="py-2 px-3 text-right text-slate-800">
                                             ₹{invoiceTotals.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                         </td>
                                     </tr>
-                                    {resolvedData.invoice.isGST && (
+                                    {resolvedData.invoice.IsGST && (
                                         <tr>
                                             <td colSpan={6} className="py-1 px-3 text-right text-slate-500 text-[11px]">
-                                                {resolvedData.invoice.isIGST ? 'IGST' : 'CGST + SGST'}:
+                                                {resolvedData.invoice.IsIGST ? 'IGST' : 'CGST + SGST'}:
                                             </td>
                                             <td className="py-1 px-3 text-right text-slate-700 text-[11px]">
                                                 ₹{invoiceTotals.taxAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -960,7 +983,7 @@ export default function CreateInvoiceFromJson() {
                                     )}
                                     {invoiceTotals.discountAmount > 0 && (
                                         <tr>
-                                            <td colSpan={resolvedData.invoice.isGST ? 6 : 4} className="py-1 px-3 text-right text-emerald-600 text-[11px]">
+                                            <td colSpan={resolvedData.invoice.IsGST ? 6 : 4} className="py-1 px-3 text-right text-emerald-600 text-[11px]">
                                                 {resolvedData.invoice.discountLabel || 'Discount'}:
                                             </td>
                                             <td className="py-1 px-3 text-right text-emerald-600 text-[11px]">
@@ -969,7 +992,7 @@ export default function CreateInvoiceFromJson() {
                                         </tr>
                                     )}
                                     <tr className="border-t border-slate-200 text-sm">
-                                        <td colSpan={resolvedData.invoice.isGST ? 6 : 4} className="py-2.5 px-3 text-right font-black text-slate-900">
+                                        <td colSpan={resolvedData.invoice.IsGST ? 6 : 4} className="py-2.5 px-3 text-right font-black text-slate-900">
                                             Grand Total:
                                         </td>
                                         <td className="py-2.5 px-3 text-right font-black text-slate-900 text-base">

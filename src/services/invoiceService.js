@@ -136,8 +136,8 @@ export const createEmptyInvoice = () => {
             ifscCode: sender.bankDetails?.ifscCode || '',
             accountHolder: sender.bankDetails?.accountHolder || ''
         },
-        isGST: false,
-        isIGST: false,
+        IsGST: false,
+        IsIGST: false,
         gstRate: 18,
         cgst: 9,
         sgst: 9,

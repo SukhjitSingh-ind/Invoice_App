@@ -40,7 +40,7 @@ export default function CreateInvoice() {
     const [clients, setClients] = useState(() => getAllClients());
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
-    const [isGST, setIsGST] = useState(false);
+    const [IsGST, setIsGST] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState(createEmptyClient());
     const { addToast } = useToast();
@@ -110,8 +110,8 @@ export default function CreateInvoice() {
         if (selectedClient) {
             params.set('clientId', selectedClient);
         }
-        if (isGST) {
-            params.set('gst', 'true');
+        if (IsGST) {
+            params.set('IsGST', 'true');
         }
         navigate(`/editor/new?${params.toString()}`);
     };
@@ -536,7 +536,7 @@ export default function CreateInvoice() {
                     <div className="relative shrink-0">
                         <input
                             type="checkbox"
-                            checked={isGST}
+                            checked={IsGST}
                             onChange={(e) => setIsGST(e.target.checked)}
                             className="sr-only peer"
                         />
@@ -546,7 +546,7 @@ export default function CreateInvoice() {
                     <div>
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-slate-800">GST Invoice</span>
-                            {isGST && (
+                            {IsGST && (
                                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-700">
                                     Enabled
                                 </span>

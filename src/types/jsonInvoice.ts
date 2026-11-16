@@ -1,90 +1,88 @@
-import { Invoice, InvoiceParty, InvoiceCustomization, DiscountType } from './invoice';
+import { Invoice, InvoiceItem, InvoiceParty, InvoiceCustomization, DiscountType } from './invoice';
 import { BankDetails } from './common';
 
 export interface RawJsonClient {
   name?: string;
   mobile?: string;
-  phone?: string;
   email?: string;
   address?: string;
   gstNumber?: string;
-  gst?: string;
-  gstin?: string;
   state?: string;
 }
 
 export interface RawJsonItem {
   id?: number | string;
   description?: string;
-  name?: string;
-  title?: string;
   quantity?: number | string;
-  qty?: number | string;
   price?: number | string;
-  rate?: number | string;
-  unitPrice?: number | string;
-  amount?: number | string;
   hsnSac?: string;
-  hsn?: string;
-  sac?: string;
   unit?: string;
   gstRate?: number | string;
-  taxRate?: number | string;
-  gst?: number | string;
 }
 
+/**
+ * Standard JSON invoice schema for user import.
+ * Uses strictly one agreed property name per concept with no legacy aliases.
+ */
 export interface RawJsonInvoice {
   invoiceNumber?: string | number;
-  number?: string | number;
-  date?: string;
   issueDate?: string;
-  invoiceDate?: string;
   dueDate?: string;
-  client?: RawJsonClient;
-  recipient?: RawJsonClient;
-  customer?: RawJsonClient;
-  billTo?: RawJsonClient;
-  sender?: RawJsonClient;
-  company?: RawJsonClient;
-  vendor?: RawJsonClient;
   template?: string;
-  templateId?: string;
-  items?: RawJsonItem[];
-  lineItems?: RawJsonItem[];
-  invoiceItems?: RawJsonItem[];
-  isGST?: boolean;
-  gst?: boolean;
-  isIGST?: boolean;
-  igst?: boolean;
-  placeOfSupply?: string;
   currency?: string;
   notes?: string;
-  note?: string;
   termsAndConditions?: string;
-  terms?: string;
   paymentInfo?: string;
-  paymentDetails?: string;
+
+  IsGST?: boolean;
+  IsIGST?: boolean;
+  placeOfSupply?: string;
+
+  client?: RawJsonClient;
+  sender?: RawJsonClient;
+  items?: RawJsonItem[];
   bankDetails?: Partial<BankDetails>;
-  bank?: Partial<BankDetails>;
+
   received?: number | string;
-  paidAmount?: number | string;
-  amountPaid?: number | string;
   discountType?: DiscountType;
   discountValue?: number | string;
   discountLabel?: string;
-  discount?: number | string | {
-    type?: DiscountType;
-    value?: number | string;
-    label?: string;
-  };
   customization?: InvoiceCustomization;
+
   [key: string]: unknown;
+}
+
+/**
+ * Normalized invoice structure produced by parsing raw JSON.
+ * Exactly matches domain properties with no redundant aliases.
+ */
+export interface NormalizedInvoice {
+  invoiceNumber: string;
+  issueDate: string;
+  dueDate?: string;
+  sender?: InvoiceParty | null;
+  client?: InvoiceParty | null;
+  template?: string;
+  items: InvoiceItem[];
+  IsGST: boolean;
+  IsIGST: boolean;
+  placeOfSupply: string;
+  currency: string;
+  notes: string;
+  termsAndConditions: string;
+  paymentInfo: string;
+  bankDetails?: BankDetails;
+  received: number;
+  discountType: DiscountType;
+  discountValue: number;
+  discountLabel: string;
+  customization?: InvoiceCustomization;
 }
 
 export interface ParseResult {
   success: boolean;
   rawParsed: RawJsonInvoice | null;
-  extractedInvoice: Partial<Invoice> | null;
+  extractedInvoice: Partial<NormalizedInvoice> | null;
   hasClient: boolean;
   hasTemplate: boolean;
   rawTemplateId?: string;
@@ -93,9 +91,10 @@ export interface ParseResult {
 }
 
 export interface ResolutionOptions {
-  extractedData: Partial<Invoice> | null;
+  extractedData: Partial<NormalizedInvoice> | null;
   manualClient?: InvoiceParty | null;
   manualTemplateId?: string | null;
+  manualIsGST?: boolean | null;
   defaultTemplateId?: string;
   senderProfile?: Partial<InvoiceParty> | null;
   bankDetailsFallback?: Partial<BankDetails> | null;

@@ -131,7 +131,7 @@ export default function InvoicePreview() {
   } = calculateInvoiceTotals(invoice);
 
   const discountValue = parseFloat(invoice.discountValue || 0);
-  const amountInWords = (invoice.isGST && !isNaN(total)) ? numberToWords(total) : '';
+  const amountInWords = (invoice.IsGST && !isNaN(total)) ? numberToWords(total) : '';
 
   const handleSort = (key) => {
     let direction = 'asc';
@@ -219,7 +219,7 @@ export default function InvoicePreview() {
     });
   };
 
-  const totalCols = invoice.isGST ? 6 : 4;
+  const totalCols = invoice.IsGST ? 6 : 4;
 
   return (
     <div className="min-h-screen bg-gray-100 p-8 flex justify-center">
@@ -283,7 +283,7 @@ export default function InvoicePreview() {
                       Mobile: {invoice.sender.phone}
                     </p>
                   )}
-                  {invoice.isGST && invoice.sender.gstNumber && (
+                  {invoice.IsGST && invoice.sender.gstNumber && (
                     <p className={`text-xs font-bold mt-1 ${isGold ? 'text-amber-400/90' : 'text-slate-800'}`}>
                       GSTIN: {invoice.sender.gstNumber}
                     </p>
@@ -291,7 +291,7 @@ export default function InvoicePreview() {
                 </div>
               </div>
               <div className="text-right">
-                <h2 className="text-5xl font-black opacity-10 uppercase tracking-widest">{invoice.isGST ? 'Tax Invoice' : 'Invoice'}</h2>
+                <h2 className="text-5xl font-black opacity-10 uppercase tracking-widest">{invoice.IsGST ? 'Tax Invoice' : 'Invoice'}</h2>
               </div>
             </div>
           )}
@@ -313,7 +313,7 @@ export default function InvoicePreview() {
                       Mobile: {invoice.sender.phone}
                     </p>
                   )}
-                  {invoice.isGST && invoice.sender.gstNumber && (
+                  {invoice.IsGST && invoice.sender.gstNumber && (
                     <p className={`text-sm font-bold mt-1 opacity-70 ${isDark ? 'text-blue-400' : (isGold ? 'text-amber-400' : 'text-slate-800')}`}>
                       GSTIN: {invoice.sender.gstNumber}
                     </p>
@@ -328,7 +328,7 @@ export default function InvoicePreview() {
                 <h3 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-2">Billed To</h3>
                 <div className={`text-2xl font-bold mb-1 ${isDark ? 'text-white' : (isGold ? 'text-amber-400' : 'text-slate-900')}`}>{invoice.recipient.name}</div>
 
-                {invoice.isGST && (
+                {invoice.IsGST && (
                   <>
                     {invoice.recipient.address && <div className="text-sm opacity-70 mt-1">{invoice.recipient.address}</div>}
                     {invoice.recipient.gstNumber && <div className="text-sm opacity-70">GSTIN: {invoice.recipient.gstNumber}</div>}
@@ -350,7 +350,7 @@ export default function InvoicePreview() {
                   </div>
                 </div>
 
-                {invoice.isGST && invoice.placeOfSupply && (
+                {invoice.IsGST && invoice.placeOfSupply && (
                   <div className="mt-3">
                     <div className="text-xs font-bold uppercase tracking-wider opacity-60">Place of Supply</div>
                     <div className={`text-lg font-bold ${isDark ? 'text-white' : (isGold ? 'text-amber-400' : 'text-slate-900')}`}>{invoice.placeOfSupply}</div>
@@ -371,7 +371,7 @@ export default function InvoicePreview() {
                         Item Description {getSortIcon('description')}
                       </div>
                     </th>
-                    {invoice.isGST && <th className={`py-4 text-center font-bold text-sm uppercase tracking-wider w-24 ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-300' : 'text-slate-700')}`}>HSN/SAC</th>}
+                    {invoice.IsGST && <th className={`py-4 text-center font-bold text-sm uppercase tracking-wider w-24 ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-300' : 'text-slate-700')}`}>HSN/SAC</th>}
                     <th
                       className={`py-4 text-center font-bold text-sm uppercase tracking-wider w-24 cursor-pointer group hover:bg-black/5 transition-colors ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-300' : 'text-slate-700')}`}
                       onClick={() => handleSort('quantity')}
@@ -389,7 +389,7 @@ export default function InvoicePreview() {
                         Rate {getSortIcon('price')}
                       </div>
                     </th>
-                    {invoice.isGST && <th className={`py-4 text-center font-bold text-sm uppercase tracking-wider w-24 ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-300' : 'text-slate-700')}`}>GST %</th>}
+                    {invoice.IsGST && <th className={`py-4 text-center font-bold text-sm uppercase tracking-wider w-24 ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-300' : 'text-slate-700')}`}>GST %</th>}
                     <th
                       className={`py-4 text-center font-bold text-sm uppercase tracking-wider w-40 cursor-pointer group hover:bg-black/5 transition-colors ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-300' : 'text-slate-700')}`}
                       onClick={() => handleSort('amount')}
@@ -404,10 +404,10 @@ export default function InvoicePreview() {
                   {getSortedItems().map((item, index) => (
                     <tr key={item.id} className={index % 2 !== 0 ? theme.accentBg : 'bg-transparent'}>
                       <td className={`py-4 pl-4 text-sm font-semibold ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-200' : 'text-slate-800')}`}>{item.description}</td>
-                      {invoice.isGST && <td className={`py-4 text-center text-xs ${isGold ? 'text-amber-400/70' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>{item.hsnSac || '-'}</td>}
+                      {invoice.IsGST && <td className={`py-4 text-center text-xs ${isGold ? 'text-amber-400/70' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>{item.hsnSac || '-'}</td>}
                       <td className={`py-4 text-center text-sm font-medium ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-400' : 'text-slate-600')}`}>{item.quantity}</td>
                       <td className={`py-4 text-center text-sm font-medium ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-400' : 'text-slate-600')}`}>{item.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      {invoice.isGST && (
+                      {invoice.IsGST && (
                         <td className={`py-4 text-center text-xs ${isGold ? 'text-amber-400/70' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>
                           {((item.quantity * item.price) * ((item.gstRate !== undefined ? item.gstRate : 18) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           <div className="text-[10px] opacity-60">({item.gstRate !== undefined ? item.gstRate : 18}%)</div>
@@ -426,9 +426,9 @@ export default function InvoicePreview() {
                       </div>
                     </td>
                   </tr>
-                  {invoice.isGST && (
+                  {invoice.IsGST && (
                     <>
-                      {invoice.isIGST ? (
+                      {invoice.IsIGST ? (
                         <tr>
                           <td colSpan={totalCols} className="py-2">
                             <div className="flex justify-end items-center gap-8 w-full">
@@ -482,7 +482,7 @@ export default function InvoicePreview() {
                       </div>
                     </td>
                   </tr>
-                  {invoice.isGST && (
+                  {invoice.IsGST && (
                     <>
                       <tr>
                         <td colSpan="5" className="py-2 font-bold text-right text-sm pr-8">Received</td>
@@ -499,7 +499,7 @@ export default function InvoicePreview() {
             </div>
 
             {/* Amount in Words - GST only */}
-            {invoice.isGST && amountInWords && (
+            {invoice.IsGST && amountInWords && (
               <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
                 <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Invoice Amount in Words</h4>
                 <p className="font-medium text-slate-800 italic">{amountInWords}</p>
@@ -507,7 +507,7 @@ export default function InvoicePreview() {
             )}
 
             {/* Terms and Conditions - GST only */}
-            {invoice.isGST && invoice.termsAndConditions && (
+            {invoice.IsGST && invoice.termsAndConditions && (
               <div className="mb-6">
                 <h4 className="text-sm font-bold text-slate-700 mb-2">Terms and Conditions</h4>
                 <p className="text-sm text-slate-600 whitespace-pre-line">{invoice.termsAndConditions}</p>
@@ -515,7 +515,7 @@ export default function InvoicePreview() {
             )}
 
             {/* Bank Details - GST only */}
-            {invoice.isGST && invoice.bankDetails && (invoice.bankDetails.bankName || invoice.bankDetails.accountNumber) && (
+            {invoice.IsGST && invoice.bankDetails && (invoice.bankDetails.bankName || invoice.bankDetails.accountNumber) && (
               <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
                 <h4 className="text-sm font-bold text-slate-700 mb-3">Payment Details</h4>
                 <div className="grid grid-cols-2 gap-3 text-sm">

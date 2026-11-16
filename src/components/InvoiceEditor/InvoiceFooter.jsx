@@ -4,7 +4,7 @@ export default function InvoiceFooter({ invoice, setInvoice, amountInWords }) {
     return (
         <>
             {/* Amount in Words - GST only */}
-            {invoice.isGST && (
+            {invoice.IsGST && (
                 <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
                     <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Invoice Amount in Words</h4>
                     <p className="font-medium text-slate-800 italic">{amountInWords}</p>
@@ -12,7 +12,7 @@ export default function InvoiceFooter({ invoice, setInvoice, amountInWords }) {
             )}
 
             {/* Terms and Conditions - GST only */}
-            {invoice.isGST && (
+            {invoice.IsGST && (
                 <div className="mb-6">
                     <h4 className="text-sm font-bold text-slate-700 mb-2">Terms and Conditions</h4>
                     <textarea
@@ -26,7 +26,7 @@ export default function InvoiceFooter({ invoice, setInvoice, amountInWords }) {
             )}
 
             {/* Bank Details - GST only */}
-            {invoice.isGST && (
+            {invoice.IsGST && (
                 <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
                     <h4 className="text-sm font-bold text-slate-700 mb-3">Payment Details</h4>
                     <div className="grid grid-cols-2 gap-3">

@@ -41,8 +41,8 @@ export interface Invoice {
   termsAndConditions?: string;
   paymentInfo?: string;
   bankDetails: BankDetails;
-  isGST: boolean;
-  isIGST: boolean;
+  IsGST: boolean;
+  IsIGST: boolean;
   gstRate?: number;
   cgst?: number;
   sgst?: number;

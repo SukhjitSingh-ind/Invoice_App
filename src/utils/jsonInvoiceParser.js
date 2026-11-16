@@ -34,13 +34,23 @@ function safeString(val, fallback = '') {
 }
 
 /**
- * Parses and validates raw JSON input into a flexible extracted invoice structure.
- *
- * Requirements:
- * - Detects malformed JSON syntax with descriptive error messages.
- * - Handles partial data, missing optional fields, empty objects, and null values gracefully.
- * - Accommodates unexpected properties without failing.
- * - Normalizes property aliases (e.g. invoiceNumber vs number, client vs recipient, rate vs price).
+ * Safely parses a boolean value strictly from the given key, supporting boolean or string 'true'/'false'.
+ * @param {any} val
+ * @returns {boolean | undefined}
+ */
+function parseBoolean(val) {
+    if (typeof val === 'boolean') return val;
+    if (typeof val === 'string') {
+        const lower = val.trim().toLowerCase();
+        if (lower === 'true') return true;
+        if (lower === 'false') return false;
+    }
+    return undefined;
+}
+
+/**
+ * Parses and validates raw JSON input into a normalized invoice structure.
+ * Uses strictly one agreed property name per data concept with no legacy aliases.
  *
  * @param {string|object} input - Raw JSON string or parsed object
  * @returns {import('../types/jsonInvoice').ParseResult}
@@ -117,34 +127,29 @@ export function parseAndValidateInvoiceJson(input) {
         };
     }
 
-    // 1. Invoice Number normalization
-    const invoiceNumber = safeString(
-        raw.invoiceNumber ?? raw.number ?? raw.invoice_number ?? raw.invNumber ?? ''
-    );
+    // 1. Invoice Number
+    const invoiceNumber = safeString(raw.invoiceNumber);
 
-    // 2. Date normalization
-    const date = safeString(
-        raw.date ?? raw.issueDate ?? raw.issue_date ?? raw.invoiceDate ?? raw.invoice_date ?? ''
-    );
+    // 2. Issue Date & Due Date
+    const issueDate = safeString(raw.issueDate);
+    const dueDate = safeString(raw.dueDate);
 
-    const dueDate = safeString(raw.dueDate ?? raw.due_date ?? '');
-
-    // 3. Client / Recipient extraction
-    const rawClient = raw.client || raw.recipient || raw.customer || raw.billTo || null;
-    let recipient = null;
+    // 3. Client extraction
+    const rawClient = raw.client;
+    let client = null;
     let hasClient = false;
 
     if (rawClient && typeof rawClient === 'object' && !Array.isArray(rawClient)) {
-        const clientName = safeString(rawClient.name ?? rawClient.clientName ?? rawClient.customerName ?? '');
-        const clientMobile = safeString(rawClient.mobile ?? rawClient.phone ?? rawClient.contact ?? '');
-        const clientEmail = safeString(rawClient.email ?? '');
-        const clientAddress = safeString(rawClient.address ?? rawClient.billingAddress ?? '');
-        const clientGst = safeString(rawClient.gstNumber ?? rawClient.gst ?? rawClient.gstin ?? '').toUpperCase();
-        const clientState = safeString(rawClient.state ?? '');
+        const clientName = safeString(rawClient.name);
+        const clientMobile = safeString(rawClient.mobile);
+        const clientEmail = safeString(rawClient.email);
+        const clientAddress = safeString(rawClient.address);
+        const clientGst = safeString(rawClient.gstNumber).toUpperCase();
+        const clientState = safeString(rawClient.state);
 
         if (clientName || clientMobile || clientEmail || clientAddress || clientGst || clientState) {
             hasClient = true;
-            recipient = {
+            client = {
                 name: clientName,
                 mobile: clientMobile,
                 email: clientEmail,
@@ -157,22 +162,22 @@ export function parseAndValidateInvoiceJson(input) {
         warnings.push('Client property is not a valid object. Ignoring client data.');
     }
 
-    // 4. Sender / Company extraction (optional)
-    const rawSender = raw.sender || raw.company || raw.vendor || null;
+    // 4. Sender extraction
+    const rawSender = raw.sender;
     let sender = null;
     if (rawSender && typeof rawSender === 'object' && !Array.isArray(rawSender)) {
         sender = {
             name: safeString(rawSender.name),
             address: safeString(rawSender.address),
-            phone: safeString(rawSender.phone ?? rawSender.mobile),
+            phone: safeString(rawSender.phone),
             email: safeString(rawSender.email),
-            gstNumber: safeString(rawSender.gstNumber ?? rawSender.gst ?? rawSender.gstin).toUpperCase(),
+            gstNumber: safeString(rawSender.gstNumber).toUpperCase(),
             state: safeString(rawSender.state)
         };
     }
 
     // 5. Template extraction & validation
-    const rawTemplate = raw.template ?? raw.templateId ?? raw.layoutTemplate ?? null;
+    const rawTemplate = raw.template;
     let template = undefined;
     let hasTemplate = false;
     let rawTemplateId = undefined;
@@ -192,7 +197,7 @@ export function parseAndValidateInvoiceJson(input) {
     }
 
     // 6. Items normalization
-    const rawItems = raw.items ?? raw.lineItems ?? raw.invoiceItems ?? null;
+    const rawItems = raw.items;
     const items = [];
 
     if (rawItems !== null && rawItems !== undefined) {
@@ -205,19 +210,13 @@ export function parseAndValidateInvoiceJson(input) {
                     return;
                 }
 
-                const description = safeString(
-                    rawItem.description ?? rawItem.name ?? rawItem.title ?? rawItem.item ?? `Item ${idx + 1}`
-                );
-                const quantity = safeNumber(rawItem.quantity ?? rawItem.qty ?? rawItem.count, 1);
-                const price = safeNumber(
-                    rawItem.price ?? rawItem.rate ?? rawItem.unitPrice ?? rawItem.cost ?? rawItem.amount,
-                    0
-                );
-                const hsnSac = safeString(rawItem.hsnSac ?? rawItem.hsn ?? rawItem.sac ?? '');
+                const description = safeString(rawItem.description ?? `Item ${idx + 1}`);
+                const quantity = safeNumber(rawItem.quantity, 1);
+                const price = safeNumber(rawItem.price, 0);
+                const hsnSac = safeString(rawItem.hsnSac);
                 const unit = safeString(rawItem.unit ?? 'Pcs');
-                const rawGstRate = rawItem.gstRate ?? rawItem.taxRate ?? rawItem.gst;
+                const rawGstRate = rawItem.gstRate;
                 const gstRate = rawGstRate !== undefined ? safeNumber(rawGstRate, 18) : 18;
-
                 const itemId = typeof rawItem.id === 'number' && Number.isInteger(rawItem.id) ? rawItem.id : idx + 1;
 
                 items.push({
@@ -233,67 +232,57 @@ export function parseAndValidateInvoiceJson(input) {
         }
     }
 
-    // 7. GST preferences
-    let isGST = undefined;
-    if (typeof raw.isGST === 'boolean') {
-        isGST = raw.isGST;
-    } else if (typeof raw.gst === 'boolean') {
-        isGST = raw.gst;
-    } else if (typeof raw.taxEnabled === 'boolean') {
-        isGST = raw.taxEnabled;
-    } else if (items.some((it) => it.hsnSac || (it.gstRate && it.gstRate > 0)) || recipient?.gstNumber || sender?.gstNumber) {
-        // Auto-detect if user has GST fields present
-        isGST = true;
+    // 7. Strict GST & IGST Resolution
+    // Default IsGST to false
+    const parsedIsGST = parseBoolean(raw.IsGST);
+    const IsGST = parsedIsGST !== undefined ? parsedIsGST : false;
+
+    // Rule: IsIGST is meaningful ONLY when IsGST is true; otherwise always false
+    let IsIGST = false;
+    if (IsGST) {
+        const parsedIsIGST = parseBoolean(raw.IsIGST);
+        IsIGST = parsedIsIGST !== undefined ? parsedIsIGST : false;
     }
 
-    const isIGST = typeof raw.isIGST === 'boolean' ? raw.isIGST : typeof raw.igst === 'boolean' ? raw.igst : false;
-    const placeOfSupply = safeString(raw.placeOfSupply ?? raw.place_of_supply ?? '');
+    const placeOfSupply = safeString(raw.placeOfSupply);
     const currency = safeString(raw.currency ?? '₹');
 
     // 8. Notes & Terms
-    let notes = safeString(raw.notes ?? raw.note ?? raw.remark ?? '');
+    let notes = safeString(raw.notes);
     if (dueDate && !notes.includes(dueDate)) {
         notes = notes ? `${notes}\nDue Date: ${dueDate}` : `Due Date: ${dueDate}`;
     }
 
-    const termsAndConditions = safeString(raw.termsAndConditions ?? raw.terms ?? raw.terms_and_conditions ?? '');
-    const paymentInfo = safeString(raw.paymentInfo ?? raw.paymentDetails ?? raw.upi ?? '');
+    const termsAndConditions = safeString(raw.termsAndConditions);
+    const paymentInfo = safeString(raw.paymentInfo);
 
     // 9. Bank Details
-    const rawBank = raw.bankDetails || raw.bank || null;
+    const rawBank = raw.bankDetails;
     let bankDetails = undefined;
     if (rawBank && typeof rawBank === 'object') {
         bankDetails = {
-            bankName: safeString(rawBank.bankName ?? rawBank.name),
-            accountNumber: safeString(rawBank.accountNumber ?? rawBank.account),
-            ifscCode: safeString(rawBank.ifscCode ?? rawBank.ifsc),
-            accountHolder: safeString(rawBank.accountHolder ?? rawBank.holder)
+            bankName: safeString(rawBank.bankName),
+            accountNumber: safeString(rawBank.accountNumber),
+            ifscCode: safeString(rawBank.ifscCode),
+            accountHolder: safeString(rawBank.accountHolder)
         };
     }
 
-    // 10. Received / Paid Amount
-    const received = safeNumber(raw.received ?? raw.paidAmount ?? raw.amountPaid, 0);
+    // 10. Received Amount
+    const received = safeNumber(raw.received, 0);
 
     // 11. Discount
     let discountType = 'fixed';
     let discountValue = 0;
     let discountLabel = 'Discount';
 
-    if (raw.discount && typeof raw.discount === 'object') {
-        discountType = raw.discount.type === 'percentage' ? 'percentage' : 'fixed';
-        discountValue = safeNumber(raw.discount.value, 0);
-        discountLabel = safeString(raw.discount.label ?? 'Discount');
-    } else if (typeof raw.discount === 'number' || typeof raw.discount === 'string') {
-        discountValue = safeNumber(raw.discount, 0);
-    } else {
-        if (raw.discountType === 'percentage' || raw.discountType === 'fixed') {
-            discountType = raw.discountType;
-        }
-        discountValue = safeNumber(raw.discountValue, 0);
-        discountLabel = safeString(raw.discountLabel ?? 'Discount');
+    if (raw.discountType === 'percentage' || raw.discountType === 'fixed') {
+        discountType = raw.discountType;
     }
+    discountValue = safeNumber(raw.discountValue, 0);
+    discountLabel = safeString(raw.discountLabel ?? 'Discount');
 
-    // 12. Customization (colors, image)
+    // 12. Customization
     let customization = undefined;
     if (raw.customization && typeof raw.customization === 'object') {
         customization = {
@@ -304,14 +293,15 @@ export function parseAndValidateInvoiceJson(input) {
     }
 
     const extractedInvoice = {
-        number: invoiceNumber,
-        date,
-        recipient,
+        invoiceNumber,
+        issueDate,
+        dueDate: dueDate || undefined,
+        client,
         sender,
         template,
         items,
-        isGST,
-        isIGST,
+        IsGST,
+        IsIGST,
         placeOfSupply,
         currency: currency || '₹',
         notes,
@@ -350,9 +340,13 @@ export function parseAndValidateInvoiceJson(input) {
  * 2. JSON-provided valid template (Fallback)
  * 3. Application default template ('default') (Final fallback)
  *
- * Invoice Fields:
- * - JSON provided values
- * - Editor defaults for missing values
+ * Tax Architecture:
+ * 1. IsGST is the single source of truth for whether GST applies (Default: false).
+ *    - manualIsGST override takes highest priority if provided.
+ *    - JSON IsGST takes fallback priority.
+ *    - Defaults strictly to false if omitted.
+ * 2. IsIGST determines Interstate vs Intrastate tax distribution only when IsGST is true.
+ *    - If IsGST is false, IsIGST is normalized to false to prevent contradictory states.
  *
  * @param {import('../types/jsonInvoice').ResolutionOptions} options
  * @returns {import('../types/jsonInvoice').ResolvedInvoiceResult}
@@ -361,6 +355,7 @@ export function resolveInvoiceData({
     extractedData,
     manualClient = null,
     manualTemplateId = null,
+    manualIsGST = null,
     defaultTemplateId = 'default',
     senderProfile = null,
     bankDetailsFallback = null,
@@ -380,25 +375,23 @@ export function resolveInvoiceData({
     let clientSource = 'none';
 
     if (manualClient && manualClient.name) {
-        // Highest priority: Explicit manual selection
         resolvedRecipient = {
             name: manualClient.name || '',
-            mobile: manualClient.mobile || manualClient.phone || '',
+            mobile: manualClient.mobile || '',
             address: manualClient.address || '',
             email: manualClient.email || '',
             gstNumber: (manualClient.gstNumber || '').toUpperCase(),
             state: manualClient.state || ''
         };
         clientSource = 'manual';
-    } else if (data.recipient && data.recipient.name) {
-        // Fallback: JSON-provided client
+    } else if (data.client && data.client.name) {
         resolvedRecipient = {
-            name: data.recipient.name || '',
-            mobile: data.recipient.mobile || data.recipient.phone || '',
-            address: data.recipient.address || '',
-            email: data.recipient.email || '',
-            gstNumber: (data.recipient.gstNumber || '').toUpperCase(),
-            state: data.recipient.state || ''
+            name: data.client.name || '',
+            mobile: data.client.mobile || '',
+            address: data.client.address || '',
+            email: data.client.email || '',
+            gstNumber: (data.client.gstNumber || '').toUpperCase(),
+            state: data.client.state || ''
         };
         clientSource = 'json';
     }
@@ -408,15 +401,12 @@ export function resolveInvoiceData({
     let templateSource = 'default';
 
     if (manualTemplateId && isValidTemplateId(manualTemplateId)) {
-        // Highest priority: Explicit manual selection
         resolvedTemplate = manualTemplateId;
         templateSource = 'manual';
     } else if (data.template && isValidTemplateId(data.template)) {
-        // Fallback: JSON-provided valid template
         resolvedTemplate = data.template;
         templateSource = 'json';
     } else {
-        // Final fallback: Application default
         resolvedTemplate = defaultTemplateId || 'default';
         templateSource = 'default';
     }
@@ -427,7 +417,7 @@ export function resolveInvoiceData({
     const resolvedSender = {
         name: data.sender?.name || senderProfile?.name || '',
         address: data.sender?.address || senderProfile?.address || '',
-        phone: data.sender?.phone || senderProfile?.phone || senderProfile?.mobile || '',
+        phone: data.sender?.phone || senderProfile?.phone || '',
         email: data.sender?.email || senderProfile?.email || '',
         gstNumber: data.sender?.gstNumber || senderProfile?.gstNumber || '',
         state: data.sender?.state || senderProfile?.state || '24-Gujarat'
@@ -458,11 +448,8 @@ export function resolveInvoiceData({
     };
 
     // --- INVOICE NUMBER & DATE ---
-    const rawNum = data.number ?? data.invoiceNumber ?? data.invoice_number;
-    const number = rawNum ? String(rawNum) : nextInvoiceNumberFallback || '1';
-
-    const rawDate = data.date ?? data.issueDate ?? data.issue_date ?? data.invoiceDate;
-    const date = rawDate ? String(rawDate) : new Date().toISOString().split('T')[0];
+    const number = data.invoiceNumber ? String(data.invoiceNumber) : nextInvoiceNumberFallback || '1';
+    const date = data.issueDate ? String(data.issueDate) : new Date().toISOString().split('T')[0];
 
     // --- ITEMS ---
     const items = Array.isArray(data.items) && data.items.length > 0
@@ -478,11 +465,17 @@ export function resolveInvoiceData({
         : [];
 
     // --- GST LOGIC ---
-    let isGST = false;
-    if (typeof data.isGST === 'boolean') {
-        isGST = data.isGST;
-    } else if (resolvedRecipient.gstNumber || resolvedSender.gstNumber || items.some((it) => it.hsnSac)) {
-        isGST = true;
+    let IsGST = false;
+    if (typeof manualIsGST === 'boolean') {
+        IsGST = manualIsGST;
+    } else if (typeof data.IsGST === 'boolean') {
+        IsGST = data.IsGST;
+    }
+
+    // --- IGST LOGIC ---
+    let IsIGST = false;
+    if (IsGST && typeof data.IsIGST === 'boolean') {
+        IsIGST = data.IsIGST;
     }
 
     const resolvedInvoice = {
@@ -498,11 +491,11 @@ export function resolveInvoiceData({
         termsAndConditions: data.termsAndConditions || '',
         paymentInfo: data.paymentInfo || '',
         bankDetails: resolvedBankDetails,
-        isGST,
-        isIGST: Boolean(data.isIGST),
-        gstRate: typeof data.gstRate === 'number' ? data.gstRate : 18,
-        cgst: typeof data.cgst === 'number' ? data.cgst : 9,
-        sgst: typeof data.sgst === 'number' ? data.sgst : 9,
+        IsGST,
+        IsIGST,
+        gstRate: 18,
+        cgst: 9,
+        sgst: 9,
         received: typeof data.received === 'number' ? data.received : 0,
         discountType: data.discountType === 'percentage' ? 'percentage' : 'fixed',
         discountValue: typeof data.discountValue === 'number' ? data.discountValue : 0,
@@ -526,6 +519,7 @@ export function resolveInvoiceData({
 
 /**
  * Returns a rich, well-formed sample JSON for quick evaluation and testing.
+ * Uses strictly one agreed property name per concept.
  * @returns {string}
  */
 export function getSampleInvoiceJson() {
@@ -534,18 +528,21 @@ export function getSampleInvoiceJson() {
             invoiceNumber: "INV-2026-001",
             issueDate: new Date().toISOString().split('T')[0],
             template: "modern_indigo",
+            IsGST: false,
+            IsIGST: false,
             client: {
                 name: "Acme Corporation Ltd",
                 email: "billing@acme.com",
                 mobile: "9876543210",
                 address: "402 Tech Park, SG Highway, Ahmedabad, Gujarat",
-                gstNumber: "24AAACA1234A1Z5"
+                gstNumber: "24AAACA1234A1Z5",
+                state: "24-Gujarat"
             },
             items: [
                 {
                     description: "Full-Stack Web Application Development",
                     quantity: 1,
-                    rate: 45000,
+                    price: 45000,
                     hsnSac: "998314",
                     gstRate: 18,
                     unit: "Project"
@@ -553,7 +550,7 @@ export function getSampleInvoiceJson() {
                 {
                     description: "Cloud Architecture & Hosting Setup",
                     quantity: 2,
-                    rate: 7500,
+                    price: 7500,
                     hsnSac: "998315",
                     gstRate: 18,
                     unit: "Month"
@@ -561,7 +558,7 @@ export function getSampleInvoiceJson() {
                 {
                     description: "Annual Maintenance & Support Contract",
                     quantity: 1,
-                    rate: 15000,
+                    price: 15000,
                     hsnSac: "9987",
                     gstRate: 18,
                     unit: "Year"
@@ -569,8 +566,6 @@ export function getSampleInvoiceJson() {
             ],
             notes: "Thank you for partnering with us. Please make payments within 15 days of invoice date.",
             termsAndConditions: "1. 100% payment against deliverables.\n2. Invoices overdue past 30 days attract 1.5% monthly interest.",
-            isGST: true,
-            isIGST: false,
             placeOfSupply: "24-Gujarat",
             discountType: "fixed",
             discountValue: 2000,

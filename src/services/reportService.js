@@ -12,12 +12,12 @@ const normalizeItemName = (name) => {
 /**
  * Calculate total price for an invoice item including GST
  * @param {Object} item - Invoice item
- * @param {boolean} isGST - Whether invoice has GST
+ * @param {boolean} IsGST - Whether invoice has GST
  * @returns {number} Total price including GST
  */
-const calculateItemTotal = (item, isGST) => {
+const calculateItemTotal = (item, IsGST) => {
     const baseTotal = (item.quantity || 0) * (item.price || 0);
-    if (isGST) {
+    if (IsGST) {
         const gstRate = item.gstRate !== undefined ? item.gstRate : 18;
         return baseTotal * (1 + gstRate / 100);
     }
@@ -33,13 +33,13 @@ export const getItemSalesReport = () => {
     const itemMap = new Map();
 
     invoices.forEach(invoice => {
-        const isGST = invoice.isGST || false;
+        const IsGST = invoice.IsGST || false;
 
         invoice.items?.forEach(item => {
             const normalizedName = normalizeItemName(item.description);
             if (!normalizedName) return;
 
-            const itemTotal = calculateItemTotal(item, isGST);
+            const itemTotal = calculateItemTotal(item, IsGST);
 
             if (!itemMap.has(normalizedName)) {
                 itemMap.set(normalizedName, {
@@ -93,7 +93,7 @@ export const getClientPurchaseReport = () => {
     invoices.forEach(invoice => {
         const clientName = invoice.recipient?.name?.trim() || 'Unknown Client';
         const normalizedClient = clientName.toLowerCase();
-        const isGST = invoice.isGST || false;
+        const IsGST = invoice.IsGST || false;
 
         if (!clientMap.has(normalizedClient)) {
             clientMap.set(normalizedClient, {
@@ -109,7 +109,7 @@ export const getClientPurchaseReport = () => {
 
         let invoiceTotal = 0;
         invoice.items?.forEach(item => {
-            const itemTotal = calculateItemTotal(item, isGST);
+            const itemTotal = calculateItemTotal(item, IsGST);
             invoiceTotal += itemTotal;
 
             const normalizedItemName = normalizeItemName(item.description);
@@ -190,11 +190,11 @@ export const getSummaryStats = () => {
 
     let totalRevenue = 0;
     invoices.forEach(invoice => {
-        const isGST = invoice.isGST || false;
+        const IsGST = invoice.IsGST || false;
         let invoiceTotal = 0;
 
         invoice.items?.forEach(item => {
-            invoiceTotal += calculateItemTotal(item, isGST);
+            invoiceTotal += calculateItemTotal(item, IsGST);
         });
 
         // Apply discount

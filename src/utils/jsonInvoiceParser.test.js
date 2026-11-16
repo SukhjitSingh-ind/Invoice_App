@@ -6,7 +6,7 @@ import {
 } from './jsonInvoiceParser.js';
 import { calculateInvoiceTotals } from './invoiceCalculations.js';
 
-console.log('Running JSON Invoice Parser & Precedence Tests...');
+console.log('Running JSON Invoice Parser Tests (Single Agreed Property Names)...');
 
 let passed = 0;
 let failed = 0;
@@ -53,8 +53,8 @@ assert(numberResult.success === false, 'Primitive number root should fail');
 const sampleJson = getSampleInvoiceJson();
 const validResult = parseAndValidateInvoiceJson(sampleJson);
 assert(validResult.success === true, 'Sample JSON should parse successfully');
-assert(validResult.extractedInvoice.number === 'INV-2026-001', 'Extracted invoice number matches');
-assert(validResult.extractedInvoice.recipient.name === 'Acme Corporation Ltd', 'Extracted client name matches');
+assert(validResult.extractedInvoice.invoiceNumber === 'INV-2026-001', 'Extracted invoice number matches');
+assert(validResult.extractedInvoice.client.name === 'Acme Corporation Ltd', 'Extracted client name matches');
 assert(validResult.extractedInvoice.items.length === 3, 'Extracted 3 line items');
 assert(validResult.extractedInvoice.template === 'modern_indigo', 'Extracted valid template');
 assert(validResult.hasClient === true, 'hasClient flag is true');
@@ -63,13 +63,13 @@ assert(validResult.hasTemplate === true, 'hasTemplate flag is true');
 // Test 5: Valid partial JSON (minimal)
 const minimalJson = JSON.stringify({
     items: [
-        { description: 'Consulting', rate: 5000 }
+        { description: 'Consulting', price: 5000 }
     ]
 });
 const partialResult = parseAndValidateInvoiceJson(minimalJson);
 assert(partialResult.success === true, 'Minimal partial JSON parses successfully');
 assert(partialResult.extractedInvoice.items.length === 1, 'Extracted 1 item from partial JSON');
-assert(partialResult.extractedInvoice.items[0].price === 5000, 'Mapped "rate" to "price"');
+assert(partialResult.extractedInvoice.items[0].price === 5000, 'Price parsed correctly');
 assert(partialResult.extractedInvoice.items[0].quantity === 1, 'Defaulted quantity to 1');
 assert(partialResult.hasClient === false, 'hasClient is false for minimal JSON');
 assert(partialResult.hasTemplate === false, 'hasTemplate is false for minimal JSON');
@@ -79,14 +79,14 @@ const extraFieldsJson = JSON.stringify({
     invoiceNumber: 'INV-99',
     arbitraryField: { foo: 'bar', baz: [1, 2, 3] },
     anotherRandomNumber: 9999,
-    items: [{ title: 'Service A', qty: 2, unitPrice: 150 }]
+    items: [{ description: 'Service A', quantity: 2, price: 150 }]
 });
 const extraResult = parseAndValidateInvoiceJson(extraFieldsJson);
 assert(extraResult.success === true, 'JSON with unknown properties parses without error');
-assert(extraResult.extractedInvoice.number === 'INV-99', 'Known fields extracted accurately');
-assert(extraResult.extractedInvoice.items[0].description === 'Service A', 'Alias title mapped to description');
-assert(extraResult.extractedInvoice.items[0].quantity === 2, 'Alias qty mapped to quantity');
-assert(extraResult.extractedInvoice.items[0].price === 150, 'Alias unitPrice mapped to price');
+assert(extraResult.extractedInvoice.invoiceNumber === 'INV-99', 'Known fields extracted accurately');
+assert(extraResult.extractedInvoice.items[0].description === 'Service A', 'Item description extracted');
+assert(extraResult.extractedInvoice.items[0].quantity === 2, 'Item quantity extracted');
+assert(extraResult.extractedInvoice.items[0].price === 150, 'Item price extracted');
 
 // Test 7: Invalid field types handled without crashing
 const weirdTypesJson = JSON.stringify({
@@ -97,7 +97,7 @@ const weirdTypesJson = JSON.stringify({
 });
 const weirdResult = parseAndValidateInvoiceJson(weirdTypesJson);
 assert(weirdResult.success === true, 'Weird types do not crash the parser');
-assert(weirdResult.extractedInvoice.number === '12345', 'Number invoice number safely cast to string');
+assert(weirdResult.extractedInvoice.invoiceNumber === '12345', 'Number invoice number safely cast to string');
 assert(weirdResult.hasClient === false, 'Invalid client object ignored gracefully');
 assert(weirdResult.warnings.length > 0, 'Generates helpful warnings for invalid types');
 
@@ -133,7 +133,7 @@ const dummyManualClient2 = {
 
 // Scenario A: JSON has client, no manual client selected -> JSON client used
 const resClient1 = resolveInvoiceData({
-    extractedData: { recipient: dummyJsonClient },
+    extractedData: { client: dummyJsonClient },
     manualClient: null
 });
 assert(resClient1.clientSource === 'json', 'Client source should be "json"');
@@ -142,7 +142,7 @@ assert(resClient1.invoice.recipient.mobile === '9999988888', 'Uses JSON client m
 
 // Scenario B: User explicitly selects manual client -> Manual takes precedence
 const resClient2 = resolveInvoiceData({
-    extractedData: { recipient: dummyJsonClient },
+    extractedData: { client: dummyJsonClient },
     manualClient: dummyManualClient1
 });
 assert(resClient2.clientSource === 'manual', 'Client source should be "manual" when selected');
@@ -154,7 +154,7 @@ assert(resClient2.invoice.recipient.address === 'Manual Avenue 1', 'Does not ble
 
 // Scenario C: User switches manual client from Alpha to Beta -> Updates cleanly
 const resClient3 = resolveInvoiceData({
-    extractedData: { recipient: dummyJsonClient },
+    extractedData: { client: dummyJsonClient },
     manualClient: dummyManualClient2
 });
 assert(resClient3.clientSource === 'manual', 'Client source is still manual');
@@ -163,7 +163,7 @@ assert(resClient3.invoice.recipient.mobile === '3333344444', 'Switches to Beta m
 
 // Scenario D: User deselects manual client -> Reverts back to JSON client
 const resClient4 = resolveInvoiceData({
-    extractedData: { recipient: dummyJsonClient },
+    extractedData: { client: dummyJsonClient },
     manualClient: null
 });
 assert(resClient4.clientSource === 'json', 'Reverts to JSON client after manual deselection');
@@ -171,7 +171,7 @@ assert(resClient4.invoice.recipient.name === 'JSON Client Corp', 'Reverts to JSO
 
 // Scenario E: Neither JSON nor manual client -> Defaults to empty walk-in client
 const resClient5 = resolveInvoiceData({
-    extractedData: { recipient: null },
+    extractedData: { client: null },
     manualClient: null
 });
 assert(resClient5.clientSource === 'none', 'Client source is "none" when no client info exists');
@@ -226,9 +226,9 @@ assert(resTpl4.invoice.template === 'default', 'Resolved template is "default"')
 
 const complexJson = {
     invoiceNumber: 'INV-TEST-42',
-    date: '2026-11-16',
-    isGST: true,
-    isIGST: false,
+    issueDate: '2026-11-16',
+    IsGST: true,
+    IsIGST: false,
     items: [
         { description: 'Widget A', quantity: 2, price: 1000, gstRate: 18 },
         { description: 'Widget B', quantity: 1, price: 2000, gstRate: 18 }
@@ -247,14 +247,8 @@ assert(resolvedInvoiceData.invoice.number === 'INV-TEST-42', 'Invoice number pop
 assert(resolvedInvoiceData.invoice.date === '2026-11-16', 'Invoice date populated');
 assert(resolvedInvoiceData.invoice.items.length === 2, 'Items array populated');
 
-// Test calculation consistency with existing application calculateInvoiceTotals
+// Test calculation consistency with calculateInvoiceTotals
 const totals = calculateInvoiceTotals(resolvedInvoiceData.invoice);
-// Subtotal = (2 * 1000) + (1 * 2000) = 4000
-// GST (18%) = 4000 * 0.18 = 720
-// Pre-discount = 4720
-// Discount = 500
-// Total = 4220
-// Balance = 4220 - 1000 = 3220
 assert(totals.subtotal === 4000, `Subtotal expected 4000, got ${totals.subtotal}`);
 assert(totals.taxAmount === 720, `Tax amount expected 720, got ${totals.taxAmount}`);
 assert(totals.cgstAmount === 360, `CGST expected 360, got ${totals.cgstAmount}`);
@@ -265,7 +259,7 @@ assert(totals.balance === 3220, `Balance expected 3220, got ${totals.balance}`);
 
 // Scenario F: User selects client when JSON does not contain client details
 const resClient6 = resolveInvoiceData({
-    extractedData: { recipient: null },
+    extractedData: { client: null },
     manualClient: dummyManualClient1
 });
 assert(resClient6.clientSource === 'manual', 'Manual client selected when JSON has no client');
@@ -288,17 +282,103 @@ assert(resTplMulti2.invoice.template === 'luxury_gold', 'Resolved template is lu
 
 // Scenario H: Partial JSON with only notes and number, items empty
 const resPartialEmptyItems = resolveInvoiceData({
-    extractedData: { number: 'INV-ONLY-NUM', notes: 'Urgent delivery' }
+    extractedData: { invoiceNumber: 'INV-ONLY-NUM', notes: 'Urgent delivery' }
 });
 assert(resPartialEmptyItems.invoice.number === 'INV-ONLY-NUM', 'Number preserved');
 assert(resPartialEmptyItems.invoice.notes === 'Urgent delivery', 'Notes preserved');
 assert(Array.isArray(resPartialEmptyItems.invoice.items) && resPartialEmptyItems.invoice.items.length === 0, 'Items default to empty array');
 
-// Scenario I: GST auto-detection when recipient has GST
-const resGstAuto = resolveInvoiceData({
-    extractedData: { recipient: { name: 'Tax Payer', gstNumber: '24AAAAA0000A1Z5' } }
+// ==========================================
+// 5. STRICT GST & IGST CONFIGURATION TESTS
+// ==========================================
+
+// Test 5.1: Missing IsGST property strictly defaults to false (even if client has GSTIN)
+const resGstDefault = resolveInvoiceData({
+    extractedData: { client: { name: 'Tax Payer', gstNumber: '24AAAAA0000A1Z5' } }
 });
-assert(resGstAuto.invoice.isGST === true, 'isGST is auto-enabled when recipient has GST');
+assert(resGstDefault.invoice.IsGST === false, 'IsGST strictly defaults to false when omitted, even if client has GSTIN');
+
+// Test 5.2: Parsing JSON without IsGST defaults extracted IsGST to false
+const parseWithoutGst = parseAndValidateInvoiceJson(JSON.stringify({
+    invoiceNumber: 'INV-NO-GST',
+    items: [{ description: 'Item 1', price: 100, gstRate: 18 }]
+}));
+assert(parseWithoutGst.extractedInvoice.IsGST === false, 'Extracted IsGST defaults to false when omitted from JSON');
+const resWithoutGst = resolveInvoiceData({ extractedData: parseWithoutGst.extractedInvoice });
+assert(resWithoutGst.invoice.IsGST === false, 'Resolved invoice IsGST defaults to false when omitted');
+
+// Test 5.3: Explicit "IsGST": true in JSON
+const parseWithIsGstTrue = parseAndValidateInvoiceJson(JSON.stringify({
+    IsGST: true,
+    items: [{ description: 'Item 1', price: 100 }]
+}));
+assert(parseWithIsGstTrue.extractedInvoice.IsGST === true, 'Extracted IsGST is true when "IsGST": true provided');
+const resWithIsGstTrue = resolveInvoiceData({ extractedData: parseWithIsGstTrue.extractedInvoice });
+assert(resWithIsGstTrue.invoice.IsGST === true, 'Resolved invoice IsGST is true when "IsGST": true');
+
+// Test 5.4: Explicit "IsGST": false in JSON
+const parseWithIsGstFalse = parseAndValidateInvoiceJson(JSON.stringify({
+    IsGST: false,
+    items: [{ description: 'Item 1', price: 100 }]
+}));
+assert(parseWithIsGstFalse.extractedInvoice.IsGST === false, 'Extracted IsGST is false when "IsGST": false provided');
+const resWithIsGstFalse = resolveInvoiceData({ extractedData: parseWithIsGstFalse.extractedInvoice });
+assert(resWithIsGstFalse.invoice.IsGST === false, 'Resolved invoice IsGST is false when "IsGST": false');
+
+// Test 5.5: String boolean representation ("true" / "false")
+const parseStringGst = parseAndValidateInvoiceJson(JSON.stringify({ IsGST: "true", IsIGST: "false" }));
+assert(parseStringGst.extractedInvoice.IsGST === true, 'String "true" for IsGST parsed as true');
+assert(parseStringGst.extractedInvoice.IsIGST === false, 'String "false" for IsIGST parsed as false');
+
+// Test 5.6: manualIsGST override takes precedence over JSON
+const resManualGstOverride1 = resolveInvoiceData({
+    extractedData: { IsGST: false },
+    manualIsGST: true
+});
+assert(resManualGstOverride1.invoice.IsGST === true, 'manualIsGST: true overrides JSON IsGST: false');
+
+const resManualGstOverride2 = resolveInvoiceData({
+    extractedData: { IsGST: true },
+    manualIsGST: false
+});
+assert(resManualGstOverride2.invoice.IsGST === false, 'manualIsGST: false overrides JSON IsGST: true');
+
+// Test 5.7: IsIGST resolution
+const resIgstTrue = resolveInvoiceData({
+    extractedData: { IsGST: true, IsIGST: true }
+});
+assert(resIgstTrue.invoice.IsGST === true && resIgstTrue.invoice.IsIGST === true, 'Both IsGST and IsIGST are true');
+
+const resIgstOmitted = resolveInvoiceData({
+    extractedData: { IsGST: true }
+});
+assert(resIgstOmitted.invoice.IsIGST === false, 'IsIGST defaults to false when omitted');
+
+// Test 5.8: Invariant - When IsGST is false, IsIGST MUST resolve to false and tax must be 0
+const resNonGstWithIgstTrue = resolveInvoiceData({
+    extractedData: {
+        IsGST: false,
+        IsIGST: true,
+        items: [{ description: 'Test Item', quantity: 2, price: 500, gstRate: 18 }]
+    }
+});
+assert(resNonGstWithIgstTrue.invoice.IsGST === false, 'Invoice IsGST is false');
+assert(resNonGstWithIgstTrue.invoice.IsIGST === false, 'Invariant enforced: IsIGST is forced to false when IsGST is false');
+
+const nonGstTotals = calculateInvoiceTotals(resNonGstWithIgstTrue.invoice);
+assert(nonGstTotals.taxAmount === 0, `Tax amount must be 0 for non-GST invoice, got ${nonGstTotals.taxAmount}`);
+assert(nonGstTotals.igstAmount === 0, `IGST amount must be 0 for non-GST invoice, got ${nonGstTotals.igstAmount}`);
+assert(nonGstTotals.cgstAmount === 0, 'CGST amount must be 0');
+assert(nonGstTotals.sgstAmount === 0, 'SGST amount must be 0');
+assert(nonGstTotals.total === 1000, `Total should equal subtotal (1000), got ${nonGstTotals.total}`);
+
+// Test 5.9: Unknown or unagreed property names are ignored
+const parseRemovedProperties = parseAndValidateInvoiceJson(JSON.stringify({
+    randomTaxFlag: true,
+    customField: true
+}));
+assert(parseRemovedProperties.extractedInvoice.IsGST === false, 'Unknown properties are ignored; IsGST defaults to false');
+assert(parseRemovedProperties.extractedInvoice.IsIGST === false, 'IsIGST is false');
 
 console.log(`\nTests Completed: ${passed} Passed, ${failed} Failed`);
 if (failed > 0) process.exit(1);
