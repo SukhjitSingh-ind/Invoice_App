@@ -8,7 +8,17 @@ import { calculateInvoiceTotals } from '../utils/invoiceCalculations';
 import { getSettings } from '../services/settingsService';
 import PaymentQRCode from '../components/PaymentQRCode';
 import html2pdf from 'html2pdf.js';
-import { ROUTES, DEFAULT_GST_RATE, DEFAULT_LOCALE } from '../constants/index.js';
+import {
+  ROUTES,
+  getEditInvoiceRoute,
+  DEFAULT_TEMPLATE,
+  DEFAULT_GST_RATE,
+  DEFAULT_DISCOUNT_LABEL,
+  DISCOUNT_TYPES,
+  PERCENTAGE_FACTOR,
+  MONEY_DECIMAL_PRECISION,
+  DEFAULT_LOCALE
+} from '../constants/index.js';
 
 import logoImg from '../assets/Logo_1_HD.png';
 
@@ -110,7 +120,7 @@ export default function InvoicePreview() {
 
   if (loading || !invoice) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
-  const template = getTemplateById(invoice.template || 'default');
+  const template = getTemplateById(invoice.template || DEFAULT_TEMPLATE);
 
   const themeKey = template.id === 'dark_mode' ? 'dark' : (template.color || 'blue');
   const theme = THEME_STYLES[themeKey] || THEME_STYLES.blue;
@@ -264,7 +274,7 @@ export default function InvoicePreview() {
 
       <div className="w-full max-w-4xl">
         <div className="no-print mb-6 flex justify-between">
-          <button onClick={() => navigate(id ? `/edit/${id}` : '/')} className="flex items-center gap-2 text-slate-600 font-bold hover:text-blue-600">
+          <button onClick={() => navigate(id ? getEditInvoiceRoute(id) : ROUTES.HOME)} className="flex items-center gap-2 text-slate-600 font-bold hover:text-blue-600">
             <ArrowLeft size={20} /> Back to Editor
           </button>
           <div className="flex gap-3">
@@ -421,14 +431,14 @@ export default function InvoicePreview() {
                       <td className={`py-4 pl-4 text-sm font-semibold ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-200' : 'text-slate-800')}`}>{item.description}</td>
                       {invoice.IsGST && <td className={`py-4 text-center text-xs ${isGold ? 'text-amber-400/70' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>{item.hsnSac || '-'}</td>}
                       <td className={`py-4 text-center text-sm font-medium ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-400' : 'text-slate-600')}`}>{item.quantity}</td>
-                      <td className={`py-4 text-center text-sm font-medium ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-400' : 'text-slate-600')}`}>{item.price.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</td>
+                      <td className={`py-4 text-center text-sm font-medium ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-400' : 'text-slate-600')}`}>{item.price.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}</td>
                       {invoice.IsGST && (
                         <td className={`py-4 text-center text-xs ${isGold ? 'text-amber-400/70' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>
-                          {((item.quantity * item.price) * ((item.gstRate !== undefined ? item.gstRate : DEFAULT_GST_RATE) / 100)).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                          {((item.quantity * item.price) * ((item.gstRate !== undefined ? item.gstRate : DEFAULT_GST_RATE) / PERCENTAGE_FACTOR)).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                           <div className="text-[10px] opacity-60">({item.gstRate !== undefined ? item.gstRate : DEFAULT_GST_RATE}%)</div>
                         </td>
                       )}
-                      <td className={`py-4 text-center text-sm font-bold ${isGold ? 'text-amber-400' : (isDark ? 'text-white' : 'text-slate-900')}`}>{(item.quantity * item.price).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</td>
+                      <td className={`py-4 text-center text-sm font-bold ${isGold ? 'text-amber-400' : (isDark ? 'text-white' : 'text-slate-900')}`}>{(item.quantity * item.price).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -437,7 +447,7 @@ export default function InvoicePreview() {
                     <td colSpan={totalCols} className="py-3">
                       <div className="flex justify-end items-center gap-8 w-full">
                         <span className="font-bold opacity-70">Subtotal</span>
-                        <span className={`font-bold w-32 text-center ${theme.totalText}`}>{subtotal.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
+                        <span className={`font-bold w-32 text-center ${theme.totalText}`}>{subtotal.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}</span>
                       </div>
                     </td>
                   </tr>
@@ -448,7 +458,7 @@ export default function InvoicePreview() {
                           <td colSpan={totalCols} className="py-2">
                             <div className="flex justify-end items-center gap-8 w-full">
                               <span className="font-bold text-sm">IGST</span>
-                              <span className="font-bold text-sm text-center w-32">{igstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
+                              <span className="font-bold text-sm text-center w-32">{igstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}</span>
                             </div>
                           </td>
                         </tr>
@@ -458,7 +468,7 @@ export default function InvoicePreview() {
                             <td colSpan={totalCols} className="py-2">
                               <div className="flex justify-end items-center gap-8 w-full">
                                 <span className="text-sm">CGST</span>
-                                <span className="text-sm text-right w-32">{cgstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
+                                <span className="text-sm text-right w-32">{cgstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}</span>
                               </div>
                             </td>
                           </tr>
@@ -466,7 +476,7 @@ export default function InvoicePreview() {
                             <td colSpan={totalCols} className="py-2 pr-4">
                               <div className="flex justify-end items-center gap-8 w-full">
                                 <span className="text-sm">SGST</span>
-                                <span className="text-sm text-right w-32">{sgstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
+                                <span className="text-sm text-right w-32">{sgstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}</span>
                               </div>
                             </td>
                           </tr>
@@ -478,11 +488,11 @@ export default function InvoicePreview() {
                     <tr className="border-t border-slate-200">
                       <td colSpan={totalCols} className="py-2">
                         <div className="flex justify-end items-center gap-8 w-full">
-                          <span className="text-sm font-bold opacity-70">{invoice.discountLabel || 'Discount'}</span>
+                          <span className="text-sm font-bold opacity-70">{invoice.discountLabel || DEFAULT_DISCOUNT_LABEL}</span>
                           <span className={`text-sm text-right w-32 ${theme.totalText}`}>
-                            {invoice.discountType === 'percentage'
-                              ? `${discountValue}% (-${discountAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })})`
-                              : `-${discountAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}`
+                            {invoice.discountType === DISCOUNT_TYPES.PERCENTAGE
+                              ? `${discountValue}% (-${discountAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })})`
+                              : `-${discountAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}`
                             }
                           </span>
                         </div>
@@ -493,7 +503,7 @@ export default function InvoicePreview() {
                     <td colSpan={totalCols} className="py-6">
                       <div className="flex justify-end items-center gap-8 w-full">
                         <span className="text-xl font-bold opacity-70">Total Amount</span>
-                        <span className={`text-2xl font-black text-right w-40 ${theme.totalText}`}>{total.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
+                        <span className={`text-2xl font-black text-right w-40 ${theme.totalText}`}>{total.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}</span>
                       </div>
                     </td>
                   </tr>
@@ -501,11 +511,11 @@ export default function InvoicePreview() {
                     <>
                       <tr>
                         <td colSpan="5" className="py-2 font-bold text-right text-sm pr-8">Received</td>
-                        <td className="py-2 pr-4 text-right text-sm font-bold">{(invoice.received || 0).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</td>
+                        <td className="py-2 pr-4 text-right text-sm font-bold">{(invoice.received || 0).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}</td>
                       </tr>
                       <tr>
                         <td colSpan="5" className="py-2 text-right text-sm pr-8 font-bold">Balance</td>
-                        <td className="py-2 pr-4 text-right text-sm font-bold">{balance.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</td>
+                        <td className="py-2 pr-4 text-right text-sm font-bold">{balance.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}</td>
                       </tr>
                     </>
                   )}

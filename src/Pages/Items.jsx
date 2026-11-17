@@ -5,7 +5,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db.js';
 import { saveItem, deleteItem, createEmptyItem, exportItemsToJSON, importItemsFromJSON } from '../services/itemService.js';
 import { useToast } from '../components/Toast';
-import { DEFAULT_LOCALE } from '../constants/index.js';
+import {
+    DEFAULT_LOCALE,
+    MONEY_DECIMAL_PRECISION,
+    DEFAULT_ITEM_UNIT,
+    TOAST_TYPES
+} from '../constants/index.js';
 
 export default function Items() {
     const liveItems = useLiveQuery(() => db.items.toArray(), []);
@@ -48,18 +53,18 @@ export default function Items() {
 
     const handleSave = async () => {
         if (!formData.name.trim()) {
-            addToast('Item name is required!', 'error');
+            addToast('Item name is required!', TOAST_TYPES.ERROR);
             return;
         }
 
         if (!formData.defaultPrice || formData.defaultPrice <= 0) {
-            addToast('Default price must be greater than zero!', 'error');
+            addToast('Default price must be greater than zero!', TOAST_TYPES.ERROR);
             return;
         }
 
         await saveItem(formData);
         handleCloseModal();
-        addToast(editingItem ? 'Item updated successfully!' : 'Item created successfully!', 'success');
+        addToast(editingItem ? 'Item updated successfully!' : 'Item created successfully!', TOAST_TYPES.SUCCESS);
     };
 
     const handleDelete = (id) => {
@@ -70,7 +75,7 @@ export default function Items() {
         if (deleteConfirm) {
             await deleteItem(deleteConfirm);
             setDeleteConfirm(null);
-            addToast('Item deleted successfully!', 'success');
+            addToast('Item deleted successfully!', TOAST_TYPES.SUCCESS);
         }
     };
 
@@ -85,9 +90,9 @@ export default function Items() {
     const handleExport = async () => {
         try {
             await exportItemsToJSON();
-            addToast('Items exported successfully!', 'success');
+            addToast('Items exported successfully!', TOAST_TYPES.SUCCESS);
         } catch {
-            addToast('Failed to export items', 'error');
+            addToast('Failed to export items', TOAST_TYPES.ERROR);
         }
     };
 
@@ -105,9 +110,9 @@ export default function Items() {
         try {
             const text = await file.text();
             const result = await importItemsFromJSON(text);
-            addToast(`Successfully imported ${result.count} item(s)!`, 'success');
+            addToast(`Successfully imported ${result.count} item(s)!`, TOAST_TYPES.SUCCESS);
         } catch (error) {
-            addToast(error.message || 'Failed to import items', 'error');
+            addToast(error.message || 'Failed to import items', TOAST_TYPES.ERROR);
         }
     };
 
@@ -264,7 +269,7 @@ export default function Items() {
                                             <DollarSign size={14} />
                                             Default Price
                                         </span>
-                                        <span className="font-bold text-slate-900">₹{item.defaultPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
+                                        <span className="font-bold text-slate-900">₹{item.defaultPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}</span>
                                     </div>
 
                                     {item.hsnSac && (
@@ -382,7 +387,7 @@ export default function Items() {
                                             type="text"
                                             value={formData.unit}
                                             onChange={(e) => handleChange('unit', e.target.value)}
-                                            placeholder="Unit (e.g., Pcs, Kg)"
+                                            placeholder={`Unit (e.g., ${DEFAULT_ITEM_UNIT}, Kg)`}
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                                         />
                                     </div>

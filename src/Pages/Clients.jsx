@@ -6,6 +6,7 @@ import { saveClient, deleteClient, createEmptyClient, exportClientsToJSON, impor
 import { getSettings } from '../services/settingsService.js';
 import { validateGST, validateEmail, validatePhone } from '../utils/validation.js';
 import { useToast } from '../components/Toast';
+import { TOAST_TYPES } from '../constants/index.js';
 
 export default function Clients() {
     const liveClients = useLiveQuery(() => db.clients.toArray(), []);
@@ -48,33 +49,33 @@ export default function Clients() {
     const handleSave = async () => {
         const settings = getSettings();
         if (!formData.name.trim()) {
-            addToast('Name is required!', 'error');
+            addToast('Name is required!', TOAST_TYPES.ERROR);
             return;
         }
 
         if (settings.validation.requireClientMobile && !formData.mobile.trim()) {
-            addToast('Mobile number is required (as per Settings)!', 'error');
+            addToast('Mobile number is required (as per Settings)!', TOAST_TYPES.ERROR);
             return;
         }
 
         if (formData.mobile && !validatePhone(formData.mobile)) {
-            addToast('Please enter a valid mobile number.', 'error');
+            addToast('Please enter a valid mobile number.', TOAST_TYPES.ERROR);
             return;
         }
 
         if (formData.email && !validateEmail(formData.email)) {
-            addToast('Please enter a valid email address.', 'error');
+            addToast('Please enter a valid email address.', TOAST_TYPES.ERROR);
             return;
         }
 
         if (formData.gstNumber && !validateGST(formData.gstNumber)) {
-            addToast('Invalid GST Number format!', 'error');
+            addToast('Invalid GST Number format!', TOAST_TYPES.ERROR);
             return;
         }
 
         await saveClient(formData);
         handleCloseModal();
-        addToast(editingClient ? 'Client updated successfully!' : 'Client created successfully!', 'success');
+        addToast(editingClient ? 'Client updated successfully!' : 'Client created successfully!', TOAST_TYPES.SUCCESS);
     };
 
     const handleDelete = (id) => {
@@ -100,9 +101,9 @@ export default function Clients() {
     const handleExport = async () => {
         try {
             await exportClientsToJSON();
-            addToast('Clients exported successfully!', 'success');
+            addToast('Clients exported successfully!', TOAST_TYPES.SUCCESS);
         } catch {
-            addToast('Failed to export clients', 'error');
+            addToast('Failed to export clients', TOAST_TYPES.ERROR);
         }
     };
 
@@ -120,9 +121,9 @@ export default function Clients() {
         try {
             const text = await file.text();
             const result = await importClientsFromJSON(text);
-            addToast(`Successfully imported ${result.count} client(s)!`, 'success');
+            addToast(`Successfully imported ${result.count} client(s)!`, TOAST_TYPES.SUCCESS);
         } catch (error) {
-            addToast(error.message || 'Failed to import clients', 'error');
+            addToast(error.message || 'Failed to import clients', TOAST_TYPES.ERROR);
         }
     };
 

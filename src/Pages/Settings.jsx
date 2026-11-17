@@ -6,6 +6,7 @@ import { exportClientsToJSON, importClientsFromJSON } from '../services/clientSe
 import { exportItemsToJSON, importItemsFromJSON } from '../services/itemService';
 import { exportFullBackup, importFullBackup } from '../services/backupService';
 import { useToast } from '../components/Toast';
+import { DEFAULT_TOAST_DURATION, TOAST_TYPES } from '../constants/index.js';
 
 export default function Settings() {
     const [settings, setSettings] = useState(() => getSettings());
@@ -28,7 +29,7 @@ export default function Settings() {
     const handleSave = async () => {
         await updateSettings(settings);
         setSaved(true);
-        setTimeout(() => setSaved(false), 3000);
+        setTimeout(() => setSaved(false), DEFAULT_TOAST_DURATION);
     };
 
     const handleReset = async () => {
@@ -36,7 +37,7 @@ export default function Settings() {
             const defaults = await resetSettings();
             setSettings(defaults);
             setSaved(true);
-            setTimeout(() => setSaved(false), 3000);
+            setTimeout(() => setSaved(false), DEFAULT_TOAST_DURATION);
         }
     };
 
@@ -279,9 +280,9 @@ export default function Settings() {
                                 onExport={async () => {
                                     const result = await exportFullBackup();
                                     if (result.success) {
-                                        addToast('Full backup exported successfully!', 'success');
+                                        addToast('Full backup exported successfully!', TOAST_TYPES.SUCCESS);
                                     } else {
-                                        addToast(`Failed to export full backup: ${result.message}`, 'error');
+                                        addToast(`Failed to export full backup: ${result.message}`, TOAST_TYPES.ERROR);
                                     }
                                 }}
                                 onImport={async (fileContent) => {
@@ -292,13 +293,13 @@ export default function Settings() {
                                     if (result.success) {
                                         addToast(
                                             `Backup restored. Invoices: ${result.counts.invoices}, Clients: ${result.counts.clients}, Items: ${result.counts.items}`,
-                                            'success'
+                                            TOAST_TYPES.SUCCESS
                                         );
                                         // Reload settings in UI so toggles reflect restored values
                                         const refreshed = getSettings();
                                         setSettings(refreshed);
                                     } else {
-                                        addToast(`Restore failed: ${result.message}`, 'error');
+                                        addToast(`Restore failed: ${result.message}`, TOAST_TYPES.ERROR);
                                     }
                                 }}
                             />
@@ -318,15 +319,15 @@ export default function Settings() {
                                 )}
                                 onExport={async () => {
                                     const success = await exportInvoices();
-                                    if (success) addToast('Invoices exported successfully!', 'success');
-                                    else addToast('Failed to export invoices', 'error');
+                                    if (success) addToast('Invoices exported successfully!', TOAST_TYPES.SUCCESS);
+                                    else addToast('Failed to export invoices', TOAST_TYPES.ERROR);
                                 }}
                                 onImport={async (fileContent) => {
                                     const result = await importInvoices(fileContent);
                                     if (result.success) {
-                                        addToast(`Imported ${result.added} new, Updated ${result.updated} invoices`, 'success');
+                                        addToast(`Imported ${result.added} new, Updated ${result.updated} invoices`, TOAST_TYPES.SUCCESS);
                                     } else {
-                                        addToast(`Import failed: ${result.message}`, 'error');
+                                        addToast(`Import failed: ${result.message}`, TOAST_TYPES.ERROR);
                                     }
                                 }}
                             />
@@ -342,19 +343,19 @@ export default function Settings() {
                                 onExport={async () => {
                                     try {
                                         await exportClientsToJSON();
-                                        addToast('Clients exported successfully!', 'success');
+                                        addToast('Clients exported successfully!', TOAST_TYPES.SUCCESS);
                                     } catch {
-                                        addToast('Failed to export clients', 'error');
+                                        addToast('Failed to export clients', TOAST_TYPES.ERROR);
                                     }
                                 }}
                                 onImport={async (fileContent) => {
                                     try {
                                         const result = await importClientsFromJSON(fileContent);
                                         if (result.success) {
-                                            addToast(`Imported ${result.count} clients successfully`, 'success');
+                                            addToast(`Imported ${result.count} clients successfully`, TOAST_TYPES.SUCCESS);
                                         }
                                     } catch (e) {
-                                        addToast(`Import failed: ${e.message}`, 'error');
+                                        addToast(`Import failed: ${e.message}`, TOAST_TYPES.ERROR);
                                     }
                                 }}
                             />
@@ -370,19 +371,19 @@ export default function Settings() {
                                 onExport={async () => {
                                     try {
                                         await exportItemsToJSON();
-                                        addToast('Items exported successfully!', 'success');
+                                        addToast('Items exported successfully!', TOAST_TYPES.SUCCESS);
                                     } catch {
-                                        addToast('Failed to export items', 'error');
+                                        addToast('Failed to export items', TOAST_TYPES.ERROR);
                                     }
                                 }}
                                 onImport={async (fileContent) => {
                                     try {
                                         const result = await importItemsFromJSON(fileContent);
                                         if (result.success) {
-                                            addToast(`Imported ${result.count} items successfully`, 'success');
+                                            addToast(`Imported ${result.count} items successfully`, TOAST_TYPES.SUCCESS);
                                         }
                                     } catch (e) {
-                                        addToast(`Import failed: ${e.message}`, 'error');
+                                        addToast(`Import failed: ${e.message}`, TOAST_TYPES.ERROR);
                                     }
                                 }}
                             />

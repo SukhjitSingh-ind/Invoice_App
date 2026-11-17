@@ -4,6 +4,8 @@ import {
     DEFAULT_GST_RATE,
     DISCOUNT_TYPES,
     DEFAULT_DISCOUNT_LABEL,
+    PERCENTAGE_FACTOR,
+    MONEY_DECIMAL_PRECISION,
     DEFAULT_LOCALE
 } from '../../constants/index.js';
 
@@ -126,13 +128,13 @@ export default function InvoiceItemsTable({
                                             className="w-16 text-center p-1 bg-transparent border border-slate-200 rounded font-medium focus:bg-white focus:border-blue-500 focus:outline-none text-sm"
                                         />
                                         <span className="text-xs text-slate-500">
-                                            ₹ {((item.quantity * item.price) * ((item.gstRate !== undefined ? item.gstRate : DEFAULT_GST_RATE) / 100)).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                                            ₹ {((item.quantity * item.price) * ((item.gstRate !== undefined ? item.gstRate : DEFAULT_GST_RATE) / PERCENTAGE_FACTOR)).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                         </span>
                                     </div>
                                 </td>
                             )}
                             <td className="py-2 text-right text-sm font-bold px-2">
-                                {(item.quantity * item.price).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                                {(item.quantity * item.price).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                             </td>
                             <td className="py-2 text-center">
                                 <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors">
@@ -155,7 +157,7 @@ export default function InvoiceItemsTable({
                             <tr className="border-t border-slate-200">
                                 <td colSpan="3" className="py-2 text-right font-bold pr-8">Subtotal</td>
                                 <td className="py-2 text-right font-bold text-slate-700 px-2">
-                                    {subtotal.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                                    {subtotal.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                 </td>
                                 <td></td>
                             </tr>
@@ -165,7 +167,7 @@ export default function InvoiceItemsTable({
                                         <span className="text-sm">IGST</span>
                                     </td>
                                     <td className="py-2 text-right text-sm px-2">
-                                        {igstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                                        {igstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                     </td>
                                     <td></td>
                                 </tr>
@@ -176,7 +178,7 @@ export default function InvoiceItemsTable({
                                             <span className="text-sm">CGST</span>
                                         </td>
                                         <td className="py-2 text-right text-sm px-2">
-                                            {cgstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                                            {cgstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                         </td>
                                         <td></td>
                                     </tr>
@@ -185,7 +187,7 @@ export default function InvoiceItemsTable({
                                             <span className="text-sm">SGST</span>
                                         </td>
                                         <td className="py-2 text-right text-sm px-2">
-                                            {sgstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                                            {sgstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                         </td>
                                         <td></td>
                                     </tr>
@@ -236,7 +238,7 @@ export default function InvoiceItemsTable({
                         </td>
                         <td className="py-2 pl-2 text-xs text-slate-400">
                             {invoice.discountType === DISCOUNT_TYPES.PERCENTAGE && invoice.discountValue > 0 &&
-                                `(-₹${discountAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })})`
+                                `(-₹${discountAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })})`
                             }
                         </td>
                     </tr>
@@ -244,7 +246,7 @@ export default function InvoiceItemsTable({
                     <tr className="border-t-2 border-black">
                         <td colSpan="3" className="py-4 text-right text-xl font-bold pr-8">Total</td>
                         <td className="py-4 text-right text-xl font-black text-slate-900 px-2">
-                            {total.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                            {total.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                         </td>
                         <td></td>
                     </tr>
