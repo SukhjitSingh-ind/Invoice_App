@@ -2,20 +2,21 @@ import React from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { LayoutDashboard, FilePlus, FileCode2, Receipt, Settings, Users, Package, BarChart3, HelpCircle, ChevronLeft, ChevronRight, Building2 } from 'lucide-react';
 import logoImg from '../assets/Logo_1_RB_HD.png';
+import { ROUTES } from '../constants/index.js';
 
 
 export default function Sidebar({ isOpen, toggleSidebar }) {
     const navItems = [
-        { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { path: '/invoices', label: 'Invoices', icon: Receipt },
-        { path: '/clients', label: 'Clients', icon: Users },
-        { path: '/items', label: 'Items', icon: Package },
-        { path: '/reports', label: 'Reports', icon: BarChart3 },
-        { path: '/create', label: 'Create Invoice', icon: FilePlus },
-        { path: '/create-json', label: 'Create from JSON', icon: FileCode2 },
-        { path: '/your-details', label: 'Your Details', icon: Building2 },
-        { path: '/help', label: 'Help', icon: HelpCircle },
-        { path: '/settings', label: 'Settings', icon: Settings },
+        { path: ROUTES.DASHBOARD, label: 'Dashboard', icon: LayoutDashboard },
+        { path: ROUTES.INVOICES, label: 'Invoices', icon: Receipt },
+        { path: ROUTES.CLIENTS, label: 'Clients', icon: Users },
+        { path: ROUTES.ITEMS, label: 'Items', icon: Package },
+        { path: ROUTES.REPORTS, label: 'Reports', icon: BarChart3 },
+        { path: ROUTES.CREATE_INVOICE, label: 'Create Invoice', icon: FilePlus },
+        { path: ROUTES.CREATE_INVOICE_JSON, label: 'Create from JSON', icon: FileCode2 },
+        { path: ROUTES.YOUR_DETAILS, label: 'Your Details', icon: Building2 },
+        { path: ROUTES.HELP, label: 'Help', icon: HelpCircle },
+        { path: ROUTES.SETTINGS, label: 'Settings', icon: Settings },
     ];
 
     return (
@@ -29,7 +30,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
             </button>
 
             <div className={`p-6 ${!isOpen && 'flex justify-center px-2'}`}>
-                <Link to="/" className={`flex items-center gap-3 hover:opacity-80 transition-opacity ${!isOpen && 'justify-center'}`}>
+                <Link to={ROUTES.HOME} className={`flex items-center gap-3 hover:opacity-80 transition-opacity ${!isOpen && 'justify-center'}`}>
                     <div className="w-12 h-12 rounded-lg overflow-hidden p-1 flex-shrink-0">
                         <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
                     </div>

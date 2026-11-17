@@ -1,3 +1,5 @@
+import { CLIENTS_PER_PAGE } from '../constants/index.js';
+
 // Client avatar color palettes aligned with modern SaaS B2B styling
 export const AVATAR_COLOR_PALETTES = [
     'bg-blue-100 text-blue-700 border-blue-200',
@@ -10,7 +12,7 @@ export const AVATAR_COLOR_PALETTES = [
     'bg-amber-100 text-amber-800 border-amber-200',
 ];
 
-export const CLIENTS_PER_PAGE = 12;
+export { CLIENTS_PER_PAGE };
 
 /**
  * Deterministically derives an avatar color palette based on client name and ID

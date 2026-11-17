@@ -34,6 +34,7 @@ import {
     CLIENTS_PER_PAGE
 } from '../utils/clientHelpers';
 import { useToast } from '../components/Toast';
+import { ROUTES } from '../constants/index.js';
 
 export default function CreateInvoice() {
     const navigate = useNavigate();
@@ -112,7 +113,7 @@ export default function CreateInvoice() {
         if (IsGST) {
             params.set('IsGST', 'true');
         }
-        navigate(`/editor/new?${params.toString()}`);
+        navigate(`${ROUTES.EDITOR_NEW}?${params.toString()}`);
     };
 
     const handleOpenModal = (prefilledName = '') => {
@@ -188,7 +189,7 @@ export default function CreateInvoice() {
                 </div>
                 <button
                     type="button"
-                    onClick={() => navigate('/create-json')}
+                    onClick={() => navigate(ROUTES.CREATE_INVOICE_JSON)}
                     className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all self-start sm:self-auto cursor-pointer border border-slate-200 shadow-sm"
                     title="Import or paste JSON to populate an invoice"
                 >

@@ -1,5 +1,11 @@
 import React from 'react';
 import { Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import {
+    DEFAULT_GST_RATE,
+    DISCOUNT_TYPES,
+    DEFAULT_DISCOUNT_LABEL,
+    DEFAULT_LOCALE
+} from '../../constants/index.js';
 
 export default function InvoiceItemsTable({
     invoice,
@@ -115,18 +121,18 @@ export default function InvoiceItemsTable({
                                     <div className="flex flex-col items-center gap-1">
                                         <input
                                             type="number"
-                                            value={item.gstRate !== undefined ? item.gstRate : 18}
+                                            value={item.gstRate !== undefined ? item.gstRate : DEFAULT_GST_RATE}
                                             onChange={(e) => handleItemChange(item.id, 'gstRate', parseFloat(e.target.value))}
                                             className="w-16 text-center p-1 bg-transparent border border-slate-200 rounded font-medium focus:bg-white focus:border-blue-500 focus:outline-none text-sm"
                                         />
                                         <span className="text-xs text-slate-500">
-                                            ₹ {((item.quantity * item.price) * ((item.gstRate !== undefined ? item.gstRate : 18) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            ₹ {((item.quantity * item.price) * ((item.gstRate !== undefined ? item.gstRate : DEFAULT_GST_RATE) / 100)).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
                                         </span>
                                     </div>
                                 </td>
                             )}
                             <td className="py-2 text-right text-sm font-bold px-2">
-                                {(item.quantity * item.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                {(item.quantity * item.price).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
                             </td>
                             <td className="py-2 text-center">
                                 <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors">
@@ -149,7 +155,7 @@ export default function InvoiceItemsTable({
                             <tr className="border-t border-slate-200">
                                 <td colSpan="3" className="py-2 text-right font-bold pr-8">Subtotal</td>
                                 <td className="py-2 text-right font-bold text-slate-700 px-2">
-                                    {subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    {subtotal.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
                                 </td>
                                 <td></td>
                             </tr>
@@ -159,7 +165,7 @@ export default function InvoiceItemsTable({
                                         <span className="text-sm">IGST</span>
                                     </td>
                                     <td className="py-2 text-right text-sm px-2">
-                                        {igstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                        {igstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
                                     </td>
                                     <td></td>
                                 </tr>
@@ -170,7 +176,7 @@ export default function InvoiceItemsTable({
                                             <span className="text-sm">CGST</span>
                                         </td>
                                         <td className="py-2 text-right text-sm px-2">
-                                            {cgstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            {cgstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
                                         </td>
                                         <td></td>
                                     </tr>
@@ -179,7 +185,7 @@ export default function InvoiceItemsTable({
                                             <span className="text-sm">SGST</span>
                                         </td>
                                         <td className="py-2 text-right text-sm px-2">
-                                            {sgstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            {sgstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
                                         </td>
                                         <td></td>
                                     </tr>
@@ -192,21 +198,21 @@ export default function InvoiceItemsTable({
                         <td colSpan="3" className="py-2 text-right pr-8">
                             <div className="flex justify-end items-center gap-2">
                                 <input
-                                    value={invoice.discountLabel || 'Discount'}
+                                    value={invoice.discountLabel || DEFAULT_DISCOUNT_LABEL}
                                     onChange={(e) => setInvoice(prev => ({ ...prev, discountLabel: e.target.value }))}
                                     className="text-right text-sm font-bold text-slate-500 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none w-24 placeholder-slate-300"
                                     placeholder="Label"
                                 />
                                 <div className="flex bg-slate-100 rounded p-0.5 border border-slate-200">
                                     <button
-                                        onClick={() => setInvoice(prev => ({ ...prev, discountType: 'fixed' }))}
-                                        className={`px-2 py-0.5 text-xs font-bold rounded ${invoice.discountType !== 'percentage' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                                        onClick={() => setInvoice(prev => ({ ...prev, discountType: DISCOUNT_TYPES.FIXED }))}
+                                        className={`px-2 py-0.5 text-xs font-bold rounded ${invoice.discountType !== DISCOUNT_TYPES.PERCENTAGE ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
                                     >
                                         ₹
                                     </button>
                                     <button
-                                        onClick={() => setInvoice(prev => ({ ...prev, discountType: 'percentage' }))}
-                                        className={`px-2 py-0.5 text-xs font-bold rounded ${invoice.discountType === 'percentage' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                                        onClick={() => setInvoice(prev => ({ ...prev, discountType: DISCOUNT_TYPES.PERCENTAGE }))}
+                                        className={`px-2 py-0.5 text-xs font-bold rounded ${invoice.discountType === DISCOUNT_TYPES.PERCENTAGE ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
                                     >
                                         %
                                     </button>
@@ -229,8 +235,8 @@ export default function InvoiceItemsTable({
                             />
                         </td>
                         <td className="py-2 pl-2 text-xs text-slate-400">
-                            {invoice.discountType === 'percentage' && invoice.discountValue > 0 &&
-                                `(-₹${discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })})`
+                            {invoice.discountType === DISCOUNT_TYPES.PERCENTAGE && invoice.discountValue > 0 &&
+                                `(-₹${discountAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })})`
                             }
                         </td>
                     </tr>
@@ -238,7 +244,7 @@ export default function InvoiceItemsTable({
                     <tr className="border-t-2 border-black">
                         <td colSpan="3" className="py-4 text-right text-xl font-bold pr-8">Total</td>
                         <td className="py-4 text-right text-xl font-black text-slate-900 px-2">
-                            {total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {total.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
                         </td>
                         <td></td>
                     </tr>

@@ -8,6 +8,7 @@ import { calculateInvoiceTotals } from '../utils/invoiceCalculations';
 import { getSettings } from '../services/settingsService';
 import PaymentQRCode from '../components/PaymentQRCode';
 import html2pdf from 'html2pdf.js';
+import { ROUTES, DEFAULT_GST_RATE, DEFAULT_LOCALE } from '../constants/index.js';
 
 import logoImg from '../assets/Logo_1_HD.png';
 
@@ -96,13 +97,13 @@ export default function InvoicePreview() {
           if (inv) {
             setInvoice(inv);
           } else {
-            navigate('/');
+            navigate(ROUTES.HOME);
           }
           setLoading(false);
         }
       });
     } else {
-      navigate('/');
+      navigate(ROUTES.HOME);
     }
     return () => { isMounted = false; };
   }, [id, navigate]);
@@ -420,14 +421,14 @@ export default function InvoicePreview() {
                       <td className={`py-4 pl-4 text-sm font-semibold ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-200' : 'text-slate-800')}`}>{item.description}</td>
                       {invoice.IsGST && <td className={`py-4 text-center text-xs ${isGold ? 'text-amber-400/70' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>{item.hsnSac || '-'}</td>}
                       <td className={`py-4 text-center text-sm font-medium ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-400' : 'text-slate-600')}`}>{item.quantity}</td>
-                      <td className={`py-4 text-center text-sm font-medium ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-400' : 'text-slate-600')}`}>{item.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      <td className={`py-4 text-center text-sm font-medium ${isGold ? 'text-amber-400' : (isDark ? 'text-slate-400' : 'text-slate-600')}`}>{item.price.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</td>
                       {invoice.IsGST && (
                         <td className={`py-4 text-center text-xs ${isGold ? 'text-amber-400/70' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>
-                          {((item.quantity * item.price) * ((item.gstRate !== undefined ? item.gstRate : 18) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          <div className="text-[10px] opacity-60">({item.gstRate !== undefined ? item.gstRate : 18}%)</div>
+                          {((item.quantity * item.price) * ((item.gstRate !== undefined ? item.gstRate : DEFAULT_GST_RATE) / 100)).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                          <div className="text-[10px] opacity-60">({item.gstRate !== undefined ? item.gstRate : DEFAULT_GST_RATE}%)</div>
                         </td>
                       )}
-                      <td className={`py-4 text-center text-sm font-bold ${isGold ? 'text-amber-400' : (isDark ? 'text-white' : 'text-slate-900')}`}>{(item.quantity * item.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      <td className={`py-4 text-center text-sm font-bold ${isGold ? 'text-amber-400' : (isDark ? 'text-white' : 'text-slate-900')}`}>{(item.quantity * item.price).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -436,7 +437,7 @@ export default function InvoicePreview() {
                     <td colSpan={totalCols} className="py-3">
                       <div className="flex justify-end items-center gap-8 w-full">
                         <span className="font-bold opacity-70">Subtotal</span>
-                        <span className={`font-bold w-32 text-center ${theme.totalText}`}>{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        <span className={`font-bold w-32 text-center ${theme.totalText}`}>{subtotal.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
                       </div>
                     </td>
                   </tr>
@@ -447,7 +448,7 @@ export default function InvoicePreview() {
                           <td colSpan={totalCols} className="py-2">
                             <div className="flex justify-end items-center gap-8 w-full">
                               <span className="font-bold text-sm">IGST</span>
-                              <span className="font-bold text-sm text-center w-32">{igstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                              <span className="font-bold text-sm text-center w-32">{igstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
                             </div>
                           </td>
                         </tr>
@@ -457,7 +458,7 @@ export default function InvoicePreview() {
                             <td colSpan={totalCols} className="py-2">
                               <div className="flex justify-end items-center gap-8 w-full">
                                 <span className="text-sm">CGST</span>
-                                <span className="text-sm text-right w-32">{cgstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                <span className="text-sm text-right w-32">{cgstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
                               </div>
                             </td>
                           </tr>
@@ -465,7 +466,7 @@ export default function InvoicePreview() {
                             <td colSpan={totalCols} className="py-2 pr-4">
                               <div className="flex justify-end items-center gap-8 w-full">
                                 <span className="text-sm">SGST</span>
-                                <span className="text-sm text-right w-32">{sgstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                <span className="text-sm text-right w-32">{sgstAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
                               </div>
                             </td>
                           </tr>
@@ -480,8 +481,8 @@ export default function InvoicePreview() {
                           <span className="text-sm font-bold opacity-70">{invoice.discountLabel || 'Discount'}</span>
                           <span className={`text-sm text-right w-32 ${theme.totalText}`}>
                             {invoice.discountType === 'percentage'
-                              ? `${discountValue}% (-${discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })})`
-                              : `-${discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                              ? `${discountValue}% (-${discountAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })})`
+                              : `-${discountAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}`
                             }
                           </span>
                         </div>
@@ -492,7 +493,7 @@ export default function InvoicePreview() {
                     <td colSpan={totalCols} className="py-6">
                       <div className="flex justify-end items-center gap-8 w-full">
                         <span className="text-xl font-bold opacity-70">Total Amount</span>
-                        <span className={`text-2xl font-black text-right w-40 ${theme.totalText}`}>{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        <span className={`text-2xl font-black text-right w-40 ${theme.totalText}`}>{total.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
                       </div>
                     </td>
                   </tr>
@@ -500,11 +501,11 @@ export default function InvoicePreview() {
                     <>
                       <tr>
                         <td colSpan="5" className="py-2 font-bold text-right text-sm pr-8">Received</td>
-                        <td className="py-2 pr-4 text-right text-sm font-bold">{(invoice.received || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        <td className="py-2 pr-4 text-right text-sm font-bold">{(invoice.received || 0).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</td>
                       </tr>
                       <tr>
                         <td colSpan="5" className="py-2 text-right text-sm pr-8 font-bold">Balance</td>
-                        <td className="py-2 pr-4 text-right text-sm font-bold">{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        <td className="py-2 pr-4 text-right text-sm font-bold">{balance.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</td>
                       </tr>
                     </>
                   )}
@@ -582,7 +583,7 @@ export default function InvoicePreview() {
 
             <div className="space-y-3">
               <button
-                onClick={() => navigate('/')}
+                onClick={() => navigate(ROUTES.HOME)}
                 className="w-full p-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center justify-center gap-3 group"
               >
                 <Home size={20} className="group-hover:scale-110 transition-transform" />
@@ -590,7 +591,7 @@ export default function InvoicePreview() {
               </button>
 
               <button
-                onClick={() => navigate('/create')}
+                onClick={() => navigate(ROUTES.CREATE_INVOICE)}
                 className="w-full p-4 bg-white border-2 border-slate-200 text-slate-700 rounded-xl font-bold hover:border-blue-500 hover:text-blue-600 transition-all flex items-center justify-center gap-3 group"
               >
                 <FilePlus size={20} className="group-hover:scale-110 transition-transform" />

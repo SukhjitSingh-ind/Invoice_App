@@ -1,4 +1,9 @@
 import { getAllInvoices } from './invoiceService.js';
+import {
+    DEFAULT_GST_RATE,
+    DISCOUNT_TYPES,
+    PAGINATION
+} from '../constants/index.js';
 
 /**
  * Normalize item name for comparison
@@ -18,7 +23,7 @@ const normalizeItemName = (name) => {
 const calculateItemTotal = (item, IsGST) => {
     const baseTotal = (item.quantity || 0) * (item.price || 0);
     if (IsGST) {
-        const gstRate = item.gstRate !== undefined ? item.gstRate : 18;
+        const gstRate = item.gstRate !== undefined ? item.gstRate : DEFAULT_GST_RATE;
         return baseTotal * (1 + gstRate / 100);
     }
     return baseTotal;
@@ -129,7 +134,7 @@ export const getClientPurchaseReport = () => {
         });
 
         const discountValue = parseFloat(invoice.discountValue || 0);
-        const discountAmount = invoice.discountType === 'percentage'
+        const discountAmount = invoice.discountType === DISCOUNT_TYPES.PERCENTAGE
             ? (invoiceTotal * discountValue / 100)
             : discountValue;
 
@@ -150,7 +155,7 @@ export const getClientPurchaseReport = () => {
  * @param {number} limit - Number of top items to return
  * @returns {Array} Top items by quantity
  */
-export const getTopItemsByQuantity = (limit = 10) => {
+export const getTopItemsByQuantity = (limit = PAGINATION.TOP_ITEMS_LIMIT) => {
     const itemSales = getItemSalesReport();
     return itemSales
         .sort((a, b) => b.totalQuantity - a.totalQuantity)
@@ -162,7 +167,7 @@ export const getTopItemsByQuantity = (limit = 10) => {
  * @param {number} limit - Number of top items to return
  * @returns {Array} Top items by revenue
  */
-export const getTopItemsByRevenue = (limit = 10) => {
+export const getTopItemsByRevenue = (limit = PAGINATION.TOP_ITEMS_LIMIT) => {
     const itemSales = getItemSalesReport();
     return itemSales
         .sort((a, b) => b.totalRevenue - a.totalRevenue)
@@ -174,7 +179,7 @@ export const getTopItemsByRevenue = (limit = 10) => {
  * @param {number} limit - Number of top clients to return
  * @returns {Array} Top clients by revenue
  */
-export const getTopClientsByRevenue = (limit = 10) => {
+export const getTopClientsByRevenue = (limit = PAGINATION.TOP_CLIENTS_LIMIT) => {
     const clientReport = getClientPurchaseReport();
     return clientReport.slice(0, limit);
 };
@@ -199,7 +204,7 @@ export const getSummaryStats = () => {
 
         // Apply discount
         const discountValue = parseFloat(invoice.discountValue || 0);
-        const discountAmount = invoice.discountType === 'percentage'
+        const discountAmount = invoice.discountType === DISCOUNT_TYPES.PERCENTAGE
             ? (invoiceTotal * discountValue / 100)
             : discountValue;
 

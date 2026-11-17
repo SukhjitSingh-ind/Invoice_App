@@ -5,6 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db.js';
 import { saveItem, deleteItem, createEmptyItem, exportItemsToJSON, importItemsFromJSON } from '../services/itemService.js';
 import { useToast } from '../components/Toast';
+import { DEFAULT_LOCALE } from '../constants/index.js';
 
 export default function Items() {
     const liveItems = useLiveQuery(() => db.items.toArray(), []);
@@ -263,7 +264,7 @@ export default function Items() {
                                             <DollarSign size={14} />
                                             Default Price
                                         </span>
-                                        <span className="font-bold text-slate-900">₹{item.defaultPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                        <span className="font-bold text-slate-900">₹{item.defaultPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
                                     </div>
 
                                     {item.hsnSac && (
@@ -452,7 +453,7 @@ export default function Items() {
                                             <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl">
                                                 <p className="text-emerald-600 text-sm font-bold uppercase mb-1">Highest Price</p>
                                                 <p className="text-2xl font-black text-emerald-700">
-                                                    ₹{getHistoryStats(viewingHistoryItem.priceHistory).maxPrice.toLocaleString('en-IN')}
+                                                    ₹{getHistoryStats(viewingHistoryItem.priceHistory).maxPrice.toLocaleString(DEFAULT_LOCALE)}
                                                 </p>
                                                 <p className="text-emerald-600 text-xs mt-1">
                                                     on {getHistoryStats(viewingHistoryItem.priceHistory).maxDate}
@@ -461,7 +462,7 @@ export default function Items() {
                                             <div className="bg-red-50 border border-red-100 p-4 rounded-xl">
                                                 <p className="text-red-600 text-sm font-bold uppercase mb-1">Lowest Price</p>
                                                 <p className="text-2xl font-black text-red-700">
-                                                    ₹{getHistoryStats(viewingHistoryItem.priceHistory).minPrice.toLocaleString('en-IN')}
+                                                    ₹{getHistoryStats(viewingHistoryItem.priceHistory).minPrice.toLocaleString(DEFAULT_LOCALE)}
                                                 </p>
                                                 <p className="text-red-600 text-xs mt-1">
                                                     on {getHistoryStats(viewingHistoryItem.priceHistory).minDate}

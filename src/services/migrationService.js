@@ -1,12 +1,18 @@
 import { db } from '../db/db.js';
 import { generateUniqueInvoiceId } from '../utils/idGenerator.js';
+import {
+    STORAGE_KEYS,
+    DEFAULT_CURRENCY,
+    DEFAULT_TEMPLATE,
+    APP_DEFAULTS
+} from '../constants/index.js';
 
-export const MIGRATION_MARKER = 'invoice_app_dexie_migrated';
-export const MIGRATION_LOCK = 'invoice_app_migration_lock';
-export const LEGACY_INVOICE_KEY = 'invoice_app_data';
-export const LEGACY_CLIENT_KEY = 'invoice_app_clients';
-export const LEGACY_ITEM_KEY = 'invoice_app_items';
-export const LEGACY_SETTINGS_KEY = 'invoice_app_settings';
+export const MIGRATION_MARKER = STORAGE_KEYS.MIGRATION_MARKER;
+export const MIGRATION_LOCK = STORAGE_KEYS.MIGRATION_LOCK;
+export const LEGACY_INVOICE_KEY = STORAGE_KEYS.LEGACY_INVOICE_KEY;
+export const LEGACY_CLIENT_KEY = STORAGE_KEYS.LEGACY_CLIENT_KEY;
+export const LEGACY_ITEM_KEY = STORAGE_KEYS.LEGACY_ITEM_KEY;
+export const LEGACY_SETTINGS_KEY = STORAGE_KEYS.LEGACY_SETTINGS_KEY;
 
 export const DEFAULT_INITIAL_INVOICES = [
     {
@@ -30,12 +36,12 @@ export const DEFAULT_INITIAL_INVOICES = [
             { id: 4, description: 'Mundra Up/Down Service (Travel/Transport)', quantity: 1, price: 3500 },
             { id: 5, description: 'Mundra breakdown service ECM wiring check', quantity: 1, price: 7500 }
         ],
-        currency: '₹',
+        currency: DEFAULT_CURRENCY,
         notes: 'Zoomlion Crane (80 Ton)',
         paymentInfo: '8141378031mokbizar',
-        template: 'default',
-        IsGST: false,
-        IsIGST: false
+        template: DEFAULT_TEMPLATE,
+        IsGST: APP_DEFAULTS.DEFAULT_IS_GST,
+        IsIGST: APP_DEFAULTS.DEFAULT_IS_IGST
     }
 ];
 
@@ -212,7 +218,7 @@ export async function initializeDatabaseAndMigrate() {
         }));
 
         const appSettingsRecord = {
-            key: 'app_config',
+            key: STORAGE_KEYS.APP_CONFIG,
             value: {
                 validation: { ...DEFAULT_INITIAL_SETTINGS.validation, ...settingsSource.validation },
                 display: { ...DEFAULT_INITIAL_SETTINGS.display, ...settingsSource.display },
@@ -248,10 +254,10 @@ export async function initializeDatabaseAndMigrate() {
         if (typeof localStorage !== 'undefined') {
             const rawInvoicesStr = localStorage.getItem(LEGACY_INVOICE_KEY);
             if (rawInvoicesStr) {
-                localStorage.setItem('invoice_app_data_backup_pre_dexie', rawInvoicesStr);
+                localStorage.setItem(STORAGE_KEYS.BACKUP_PRE_DEXIE, rawInvoicesStr);
             }
             localStorage.setItem(MIGRATION_MARKER, 'true');
-            localStorage.setItem('invoice_app_schema_version', '2');
+            localStorage.setItem(STORAGE_KEYS.SCHEMA_VERSION, '2');
             localStorage.removeItem(MIGRATION_LOCK);
         }
 
@@ -278,7 +284,7 @@ async function seedInitialData() {
         await db.invoices.bulkPut(DEFAULT_INITIAL_INVOICES.map(inv => transformInvoiceForDexie(inv)));
         await db.companies.bulkPut(DEFAULT_INITIAL_SETTINGS.companyProfiles.map(p => ({ ...p, isDefault: true })));
         await db.settings.put({
-            key: 'app_config',
+            key: STORAGE_KEYS.APP_CONFIG,
             value: {
                 validation: DEFAULT_INITIAL_SETTINGS.validation,
                 display: DEFAULT_INITIAL_SETTINGS.display,

@@ -2,6 +2,16 @@ import { db } from '../db/db.js';
 import { getActiveProfile } from './settingsService.js';
 import { upsertClient } from './clientService.js';
 import { transformInvoiceForDexie, DEFAULT_INITIAL_INVOICES } from './migrationService.js';
+import {
+    DEFAULT_CURRENCY,
+    DEFAULT_GST_RATE,
+    DEFAULT_CGST_RATE,
+    DEFAULT_SGST_RATE,
+    DEFAULT_DISCOUNT_TYPE,
+    DEFAULT_DISCOUNT_VALUE,
+    DEFAULT_DISCOUNT_LABEL,
+    APP_DEFAULTS
+} from '../constants/index.js';
 
 export const migrateInvoiceRecord = (inv) => {
     const transformed = transformInvoiceForDexie(inv);
@@ -149,7 +159,7 @@ export const createEmptyInvoice = (overrideProfile = null) => {
         },
         placeOfSupply: '',
         items: [],
-        currency: '₹',
+        currency: DEFAULT_CURRENCY,
         notes: '',
         termsAndConditions: '',
         paymentInfo: '',
@@ -159,15 +169,15 @@ export const createEmptyInvoice = (overrideProfile = null) => {
             ifscCode: sender.bankDetails?.ifscCode || '',
             accountHolder: sender.bankDetails?.accountHolder || ''
         },
-        IsGST: false,
-        IsIGST: false,
-        gstRate: 18,
-        cgst: 9,
-        sgst: 9,
+        IsGST: APP_DEFAULTS.DEFAULT_IS_GST,
+        IsIGST: APP_DEFAULTS.DEFAULT_IS_IGST,
+        gstRate: DEFAULT_GST_RATE,
+        cgst: DEFAULT_CGST_RATE,
+        sgst: DEFAULT_SGST_RATE,
         received: 0,
-        discountType: 'fixed',
-        discountValue: 0,
-        discountLabel: 'Discount',
+        discountType: DEFAULT_DISCOUNT_TYPE,
+        discountValue: DEFAULT_DISCOUNT_VALUE,
+        discountLabel: DEFAULT_DISCOUNT_LABEL,
         customization: {
             backgroundColor: '',
             fontColor: '',

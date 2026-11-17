@@ -2,6 +2,7 @@ import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { getSettings } from '../services/settingsService';
 import qrCodeImg from '../assets/QRCODE_1.jpg';
+import { DEFAULT_CURRENCY_CODE } from '../constants/index.js';
 
 const PaymentQRCode = ({ amount, note, size = 128, className = "" }) => {
     const settings = getSettings();
@@ -19,7 +20,7 @@ const PaymentQRCode = ({ amount, note, size = 128, className = "" }) => {
         );
     }
 
-    const upiURL = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName || '')}&am=${amount}&cu=INR&tn=${encodeURIComponent(note || '')}`;
+    const upiURL = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName || '')}&am=${amount}&cu=${DEFAULT_CURRENCY_CODE}&tn=${encodeURIComponent(note || '')}`;
 
     return (
         <div className={`bg-white p-2 ${className}`} style={{ width: 'fit-content' }}>

@@ -51,6 +51,7 @@ import {
 } from '../utils/jsonInvoiceParser.js';
 import { calculateInvoiceTotals } from '../utils/invoiceCalculations.js';
 import { useToast } from '../components/Toast.jsx';
+import { ROUTES, STORAGE_KEYS, DEFAULT_LOCALE } from '../constants/index.js';
 
 export default function CreateInvoiceFromJson() {
     const navigate = useNavigate();
@@ -273,13 +274,13 @@ export default function CreateInvoiceFromJson() {
 
         // Store in sessionStorage as backup for page reload resilience
         try {
-            sessionStorage.setItem('pending_imported_invoice', JSON.stringify(finalInvoice));
+            sessionStorage.setItem(STORAGE_KEYS.PENDING_IMPORTED_INVOICE, JSON.stringify(finalInvoice));
         } catch (e) {
             console.error('Session storage write error:', e);
         }
 
         // Navigate to editor with state
-        navigate('/editor/new', {
+        navigate(ROUTES.EDITOR_NEW, {
             state: {
                 importedInvoice: finalInvoice
             }
@@ -916,7 +917,7 @@ export default function CreateInvoiceFromJson() {
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Grand Total</span>
                         <div className="flex items-center gap-2 text-base font-black text-slate-900">
                             <DollarSign size={16} className="text-emerald-600" />
-                            <span>₹{invoiceTotals.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            <span>₹{invoiceTotals.total.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
                         </div>
                     </div>
                 </div>
@@ -953,12 +954,12 @@ export default function CreateInvoiceFromJson() {
                                                 <td className="py-2 px-3 text-center text-slate-500 font-mono">{item.hsnSac || '—'}</td>
                                             )}
                                             <td className="py-2 px-3 text-center text-slate-700">{item.quantity}</td>
-                                            <td className="py-2 px-3 text-right text-slate-700">₹{item.price.toLocaleString('en-IN')}</td>
+                                            <td className="py-2 px-3 text-right text-slate-700">₹{item.price.toLocaleString(DEFAULT_LOCALE)}</td>
                                             {resolvedData.invoice.IsGST && (
                                                 <td className="py-2 px-3 text-center text-slate-500">{item.gstRate ?? 18}%</td>
                                             )}
                                             <td className="py-2 px-3 text-right font-bold text-slate-900">
-                                                ₹{(item.quantity * item.price).toLocaleString('en-IN')}
+                                                ₹{(item.quantity * item.price).toLocaleString(DEFAULT_LOCALE)}
                                             </td>
                                         </tr>
                                     ))}
@@ -969,7 +970,7 @@ export default function CreateInvoiceFromJson() {
                                             Subtotal:
                                         </td>
                                         <td className="py-2 px-3 text-right text-slate-800">
-                                            ₹{invoiceTotals.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            ₹{invoiceTotals.subtotal.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
                                         </td>
                                     </tr>
                                     {resolvedData.invoice.IsGST && (
@@ -978,7 +979,7 @@ export default function CreateInvoiceFromJson() {
                                                 {resolvedData.invoice.IsIGST ? 'IGST' : 'CGST + SGST'}:
                                             </td>
                                             <td className="py-1 px-3 text-right text-slate-700 text-[11px]">
-                                                ₹{invoiceTotals.taxAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                ₹{invoiceTotals.taxAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
                                             </td>
                                         </tr>
                                     )}
