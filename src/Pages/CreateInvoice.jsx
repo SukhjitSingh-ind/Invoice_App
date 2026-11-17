@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Plus,
@@ -16,11 +16,14 @@ import {
     RotateCcw,
     ChevronLeft,
     ChevronRight,
-    AlertCircle
+    AlertCircle,
+    FileCode2
 } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db.js';
 import { TEMPLATES } from '../utils/templates';
-import { getAllClients, saveClient, createEmptyClient } from '../services/clientService';
-import { getSettings } from '../services/settingsService';
+import { saveClient, createEmptyClient } from '../services/clientService.js';
+import { getSettings } from '../services/settingsService.js';
 import { validateGST, validateEmail, validatePhone } from '../utils/validation';
 import {
     filterClients,
@@ -36,17 +39,14 @@ export default function CreateInvoice() {
     const navigate = useNavigate();
     const [selectedClient, setSelectedClient] = useState('');
     const [selectedTemplate, setSelectedTemplate] = useState('');
-    const [clients, setClients] = useState(() => getAllClients());
+    const liveClients = useLiveQuery(() => db.clients.toArray(), []);
+    const clients = useMemo(() => liveClients || [], [liveClients]);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
-    const [isGST, setIsGST] = useState(false);
+    const [IsGST, setIsGST] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState(createEmptyClient());
     const { addToast } = useToast();
-
-    const loadClients = useCallback(() => {
-        setClients(getAllClients());
-    }, []);
 
     const handleSearchChange = (e) => {
         setSearchQuery(e.target.value);
@@ -109,8 +109,8 @@ export default function CreateInvoice() {
         if (selectedClient) {
             params.set('clientId', selectedClient);
         }
-        if (isGST) {
-            params.set('gst', 'true');
+        if (IsGST) {
+            params.set('IsGST', 'true');
         }
         navigate(`/editor/new?${params.toString()}`);
     };
@@ -128,7 +128,7 @@ export default function CreateInvoice() {
         setFormData(createEmptyClient());
     };
 
-    const handleSaveClient = () => {
+    const handleSaveClient = async () => {
         const settings = getSettings();
         if (!formData.name.trim()) {
             addToast('Client Name is required!', 'error');
@@ -155,8 +155,7 @@ export default function CreateInvoice() {
             return;
         }
 
-        const saved = saveClient(formData);
-        loadClients();
+        const saved = await saveClient(formData);
         setSelectedClient(saved.id.toString());
         setSearchQuery('');
         setCurrentPage(1);
@@ -177,14 +176,25 @@ export default function CreateInvoice() {
     return (
         <div className="p-6 md:p-8 max-w-6xl mx-auto pb-16">
             {/* Page Header */}
-            <div className="mb-8">
-                <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">
-                    <span>Invoice Workflow</span>
-                    <span>•</span>
-                    <span>New Invoice Setup</span>
+            <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">
+                        <span>Invoice Workflow</span>
+                        <span>•</span>
+                        <span>New Invoice Setup</span>
+                    </div>
+                    <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">Create New Invoice</h1>
+                    <p className="text-slate-500 mt-1 text-base">Select a client and choose an invoice template to launch the editor.</p>
                 </div>
-                <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">Create New Invoice</h1>
-                <p className="text-slate-500 mt-1 text-base">Select a client and choose an invoice template to launch the editor.</p>
+                <button
+                    type="button"
+                    onClick={() => navigate('/create-json')}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all self-start sm:self-auto cursor-pointer border border-slate-200 shadow-sm"
+                    title="Import or paste JSON to populate an invoice"
+                >
+                    <FileCode2 size={16} className="text-blue-600" />
+                    <span>Create from JSON</span>
+                </button>
             </div>
 
             {/* STEP 1: Client Selection Section */}
@@ -524,7 +534,7 @@ export default function CreateInvoice() {
                     <div className="relative shrink-0">
                         <input
                             type="checkbox"
-                            checked={isGST}
+                            checked={IsGST}
                             onChange={(e) => setIsGST(e.target.checked)}
                             className="sr-only peer"
                         />
@@ -534,7 +544,7 @@ export default function CreateInvoice() {
                     <div>
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-slate-800">GST Invoice</span>
-                            {isGST && (
+                            {IsGST && (
                                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-700">
                                     Enabled
                                 </span>

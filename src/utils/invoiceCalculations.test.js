@@ -21,8 +21,8 @@ const standardInvoice = {
         { price: 100, quantity: 2, gstRate: 18 },
         { price: 200, quantity: 1, gstRate: 12 }
     ],
-    isGST: true,
-    isIGST: false,
+    IsGST: true,
+    IsIGST: false,
     discountType: 'fixed',
     discountValue: 50,
     received: 100
@@ -45,8 +45,8 @@ const igstInvoice = {
     items: [
         { price: 500, quantity: 2, gstRate: 18 }
     ],
-    isGST: true,
-    isIGST: true,
+    IsGST: true,
+    IsIGST: true,
     discountType: 'percentage',
     discountValue: 10, // 10%
     received: 500
@@ -68,7 +68,7 @@ const nonGstInvoice = {
     items: [
         { price: 150, quantity: 3 }
     ],
-    isGST: false,
+    IsGST: false,
     received: 450
 };
 const totals3 = calculateInvoiceTotals(nonGstInvoice);

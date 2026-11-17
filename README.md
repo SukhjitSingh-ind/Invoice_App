@@ -1,6 +1,8 @@
 # Invoice Manager
 
-A modern, fast, and offline-capable invoicing and client management suite built with **React 19**, **Vite**, and **Tailwind CSS**. Designed specifically for small businesses, freelancers, and enterprises needing full GST/Non-GST compliance, multi-company profiles, UPI QR payments, financial reporting, and professional PDF generation.
+A modern, fast, and offline-capable invoicing, inventory, and client management suite built with **React 19**, **Vite**, and **Tailwind CSS**, powered by a high-performance **Dexie.js (IndexedDB)** persistence engine. 
+
+Designed specifically for small businesses, freelancers, and enterprises needing full Indian GST/Non-GST compliance, multi-company profiles, UPI QR payments, financial reporting, and professional PDF generation.
 
 ---
 
@@ -8,27 +10,29 @@ A modern, fast, and offline-capable invoicing and client management suite built 
 
 1. [Overview & Key Features](#overview--key-features)
 2. [Technology Stack](#technology-stack)
-3. [Architecture Overview](#architecture-overview)
+3. [Architecture & Persistence Model](#architecture--persistence-model)
 4. [Project Directory Layout](#project-directory-layout)
 5. [Getting Started & Installation](#getting-started--installation)
-6. [Environment Configuration](#environment-configuration)
-7. [Available Scripts & Workflow](#available-scripts--workflow)
-8. [Testing & Quality Verification](#testing--quality-verification)
+6. [Available Scripts & Quality Verification](#available-scripts--quality-verification)
+7. [Dexie.js (IndexedDB) Persistence & Migration](#dexiejs-indexeddb-persistence--migration)
+8. [JSON Invoice Import & Data Model](#json-invoice-import--data-model)
 9. [Performance & Bundling Strategy](#performance--bundling-strategy)
 10. [Build & Deployment](#build--deployment)
-11. [Contributing & Standards](#contributing--standards)
+11. [Developer Guidelines & Standards](#developer-guidelines--standards)
 
 ---
 
 ## Overview & Key Features
 
-- **GST & Tax Compliance**: Full support for Indian GST calculation, separating Intra-state (CGST + SGST) and Interstate (IGST) taxes, with custom tax rates per line item and percentage or fixed discount support.
-- **Number to Words Conversion**: Automatic translation of invoice grand totals into words following the Indian currency convention (Rupees, Lakhs, Crores, and Paise).
-- **UPI QR Code Payments**: Instant generation of dynamic UPI payment QR codes encoding UPI VPA, payee name, invoice amount, and note for seamless smartphone payment scanning.
-- **8 Professional Invoice Templates**: Variety of layouts (Clean Serif, Minimalist Mono, Creative Bold, Corporate Green, Modern Indigo, Retro Warm, Dark Future, Luxury Gold) with custom branding, color themes, and background uploads.
-- **Client & Item Management**: Centralized client phonebook and item catalogue with item-level pricing history, auto-fill during invoice creation, and individual JSON backups.
+- **IndexedDB Persistence with Dexie.js**: Robust, structured client-side database capable of storing thousands of invoices, clients, and items without the 5 MB quota limitations or main-thread blocking of `localStorage`.
+- **Statutory GST & Tax Compliance**: Full support for Indian GST calculation, separating Intra-state (CGST + SGST) and Interstate (IGST) taxes, with item-level tax rates, percentage or fixed discounts, and strict boolean tax flags (`IsGST` and `IsIGST`).
+- **Create Invoice from JSON**: High-speed JSON invoice import parser with live syntax validation, warning diagnostics, client and template override precedence, and automatic editor hydration.
+- **Dynamic UPI QR Code Payments**: Instant generation of dynamic UPI payment QR codes encoding UPI VPA, payee name, invoice amount, and invoice reference for seamless smartphone payment scanning.
+- **Number to Words Conversion**: Automatic translation of invoice grand totals into words following Indian currency standards (Rupees, Lakhs, Crores, and Paise).
+- **8 Professional Invoice Templates**: Layouts for every business style (Clean Serif, Minimalist Mono, Creative Bold, Corporate Green, Modern Indigo, Retro Warm, Dark Future, Luxury Gold) with custom branding, color themes, and background uploads.
+- **Client & Item Management**: Centralized client directory and item catalog with item-level price histories, auto-fill during invoice creation, and standalone JSON backups.
 - **Reports & Analytics**: Visual revenue analytics, top-selling items by revenue/quantity, and client spending breakdown with one-click multi-sheet Excel (`.xlsx`) export.
-- **Data Privacy & Backup**: 100% client-side persistence using structured `localStorage`, complete with full database JSON snapshot export and restore.
+- **Full Database Backup & Disaster Recovery**: One-click JSON backup export and restore across all database tables with automatic data validation and schema normalization.
 
 ---
 
@@ -40,17 +44,19 @@ A modern, fast, and offline-capable invoicing and client management suite built 
 | **Routing** | React Router DOM v7 |
 | **Build Tool & Bundler** | Vite 7 (ESM, Rollup) |
 | **Styling & Design System** | Tailwind CSS v3, PostCSS, Autoprefixer |
+| **Client-Side Database** | Dexie.js v4 (`dexie`, `dexie-react-hooks`) on **IndexedDB** |
 | **Iconography** | Lucide React |
 | **Data Visualizations** | Recharts v3 |
 | **Document & Data Export** | `html2pdf.js`, `xlsx`, `qrcode.react` |
+| **Type Checking** | TypeScript (`tsc --noEmit`) |
 | **Linting & Code Quality** | ESLint 9 (Flat Config), `@eslint/js`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh` |
-| **Testing** | Node.js automated test runner (`src/run_tests.js`) |
+| **Automated Testing** | Node.js automated test runner (`src/run_tests.js`) |
 
 ---
 
-## Architecture Overview
+## Architecture & Persistence Model
 
-The application follows a clean, decoupled layer architecture:
+The application follows a decoupled layered architecture:
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -63,21 +69,21 @@ The application follows a clean, decoupled layer architecture:
 │                    Business Services                   │
 │   invoiceService, clientService, itemService,          │
 │   settingsService, reportService, backupService        │
-└───────────────────────────┬────────────────────────────┘
-                            │
-┌───────────────────────────▼────────────────────────────┐
-│               Utilities & Domain Helpers               │
-│   invoiceCalculations, numberToWords, validation,      │
-│   templates configuration & theme mapping              │
-└───────────────────────────┬────────────────────────────┘
-                            │
-┌───────────────────────────▼────────────────────────────┐
-│                   Storage / Persistence                │
-│             Browser LocalStorage (JSON-backed)          │
-└────────────────────────────────────────────────────────┘
+└─────────────┬────────────────────────────┬─────────────┘
+              │                            │
+┌─────────────▼──────────────┐ ┌───────────▼─────────────┐
+│ Utilities & Domain Helpers │ │   In-Memory Cache &     │
+│ invoiceCalculations,       │ │   useLiveQuery Hooks    │
+│ jsonInvoiceParser,         │ │   (dexie-react-hooks)   │
+│ numberToWords, validation  │ └───────────┬─────────────┘
+└────────────────────────────┘             │
+                            ┌──────────────▼─────────────┐
+                            │    Dexie.js / IndexedDB    │
+                            │      'InvoiceAppDB'        │
+                            └────────────────────────────┘
 ```
 
-For an in-depth exploration of architecture decisions, state management, and lifecycle patterns, consult [ARCHITECTURE.md](file:///c:/Users/HP/OneDrive/Desktop/Invoice%20generator/invoice-app/ARCHITECTURE.md).
+For comprehensive engineering specifications, architectural decisions (ADRs), and lifecycle diagrams, consult [ARCHITECTURE.md](file:///c:/Users/HP/OneDrive/Desktop/Invoice%20generator/invoice-app/ARCHITECTURE.md).
 
 ---
 
@@ -89,50 +95,64 @@ invoice-app/
 ├── src/
 │   ├── assets/             # Brand logos and static images
 │   ├── components/         # Reusable UI components
+│   │   ├── AppBootstrap.jsx # Database bootstrapper and cache hydration gate
 │   │   ├── InvoiceEditor/  # Editor sub-components (Header, Table, Footer)
 │   │   ├── PaymentQRCode.jsx # Dynamic UPI QR code component
 │   │   ├── Sidebar.jsx     # Navigation sidebar with responsive toggle
 │   │   └── Toast.jsx       # Global notification toast provider and hook
+│   ├── db/
+│   │   └── db.js           # Dexie.js database instance and schema (InvoiceAppDB)
 │   ├── layouts/
 │   │   └── MainLayout.jsx  # Main application shell with sidebar outlet
 │   ├── Pages/              # Route views (Lazy-loaded)
 │   │   ├── Clients.jsx     # Client address book & management
-│   │   ├── CreateInvoice.jsx # Invoice initiation wizard
+│   │   ├── CreateInvoice.jsx # Standard invoice creation wizard
+│   │   ├── CreateInvoiceFromJson.jsx # JSON invoice import parser view
 │   │   ├── Dashboard.jsx   # Metrics, receivables, and recent activity
-│   │   ├── Help.jsx        # Documentation & usage guidance
+│   │   ├── Help.jsx        # User manual and interactive guide
 │   │   ├── InvoiceEditor.jsx # Full-featured invoice form & editor
 │   │   ├── InvoicePreview.jsx # High-fidelity print & PDF view
 │   │   ├── Invoices.jsx    # Invoice table, filter, and quick payment toggle
 │   │   ├── Items.jsx       # Inventory catalogue & price history
 │   │   ├── LandingPage.jsx # Product introduction & quick start
 │   │   ├── Reports.jsx     # Sales analytics, charts & Excel export
-│   │   ├── Settings.jsx    # Application validation & backup settings
+│   │   ├── Settings.jsx    # Validation, backup, and restore settings
 │   │   └── YourDetails.jsx # Company profiles & banking configuration
 │   ├── services/           # Data access layer & business services
-│   │   ├── backupService.js  # Full database export and restore
-│   │   ├── clientService.js  # Client CRUD, upsert, and JSON sync
-│   │   ├── invoiceService.js # Invoice creation, numbering, and queries
-│   │   ├── itemService.js    # Items catalogue, prices, and histories
-│   │   ├── reportService.js  # Metric aggregations and sales calculations
-│   │   └── settingsService.js# Profile & display preferences persistence
+│   │   ├── backupService.js   # Full Dexie database export and restore
+│   │   ├── clientService.js   # Client CRUD and in-memory cache
+│   │   ├── invoiceService.js  # Invoice creation, numbering, and queries
+│   │   ├── itemService.js     # Items catalogue and price histories
+│   │   ├── migrationService.js # Atomic migration runner & invoice transformer
+│   │   ├── migrationService.test.js # Persistence & migration unit tests
+│   │   ├── reportService.js   # Metric aggregations and sales calculations
+│   │   └── settingsService.js # Profile and application settings persistence
+│   ├── types/              # TypeScript definitions & data models
+│   │   ├── client.ts       # Client data types
+│   │   ├── common.ts       # Shared banking and party interfaces
+│   │   ├── invoice.ts      # Authoritative Invoice interface
+│   │   ├── item.ts         # Item catalog and price history types
+│   │   ├── jsonInvoice.ts  # JSON invoice parsing & resolution types
+│   │   ├── report.ts       # Reporting metrics types
+│   │   └── settings.ts     # Configuration and profile types
 │   ├── utils/              # Pure computational helpers & tests
-│   │   ├── invoiceCalculations.js      # Subtotal, tax, discount formulas
-│   │   ├── invoiceCalculations.test.js # Calculation unit tests
-│   │   ├── numberToWords.js            # Indian numbering conversion
-│   │   ├── numberToWords.test.js       # Number-to-words unit tests
-│   │   ├── templates.js                # Template styling configurations
-│   │   ├── templates.test.js           # Template registry unit tests
-│   │   ├── validation.js               # GST, phone, and email validators
-│   │   └── validation.test.js          # Validation unit tests
+│   │   ├── clientHelpers.js        # Pagination & search filtering
+│   │   ├── idGenerator.js          # RFC 4122 v4 UUID generator
+│   │   ├── invoiceCalculations.js  # Subtotal, tax, discount formulas
+│   │   ├── jsonInvoiceParser.js    # JSON invoice validation and normalization
+│   │   ├── numberToWords.js        # Indian currency numbering converter
+│   │   ├── templates.js            # Template styling configurations
+│   │   └── validation.ts           # GSTIN, phone, and email validators
 │   ├── App.jsx             # Route definitions & lazy code-splitting
 │   ├── index.css           # Tailwind base styles and font imports
-│   ├── main.jsx            # Application entry point
+│   ├── main.jsx            # Application entry point with <AppBootstrap>
 │   └── run_tests.js        # Automated test suite runner
 ├── .env.example            # Environment variables template
 ├── ARCHITECTURE.md         # Detailed architectural documentation
 ├── eslint.config.js        # ESLint 9 flat configuration
 ├── package.json            # Project manifest, scripts, and dependencies
 ├── tailwind.config.js      # Tailwind CSS configuration
+├── tsconfig.json           # TypeScript configuration
 └── vite.config.js          # Vite build, server, and manual chunks setup
 ```
 
@@ -145,7 +165,7 @@ invoice-app/
 - **Node.js**: v18.0.0 or higher (v20+ recommended)
 - **Package Manager**: `npm` (v9+) or `yarn` / `pnpm`
 
-### Installation
+### Installation Steps
 
 1. Clone the repository:
    ```bash
@@ -171,92 +191,123 @@ invoice-app/
 
 ---
 
-## Environment Configuration
-
-Environment variables are managed using Vite's `import.meta.env` system.
-
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `VITE_APP_TITLE` | Application title rendered in the browser | `Invoice Generator` |
-| `VITE_API_BASE_URL` | Optional remote API endpoint (for future sync) | `http://localhost:3000/api` |
-
----
-
-## Available Scripts & Workflow
+## Available Scripts & Quality Verification
 
 All scripts are executed via `npm run <script>`:
 
 - `npm run dev`: Starts the Vite local development server with Hot Module Replacement (HMR).
-- `npm run build`: Compiles and minifies the application into the `dist/` directory with code splitting and vendor chunking.
-- `npm run lint`: Executes ESLint 9 to verify React rules, hook invariants, and variable usage.
-- `npm test`: Runs the automated unit test suite across calculation, validation, number-to-words, and template modules.
-- `npm run preview`: Launches a local static server to test production build artifacts from `dist/`.
+- `npm run build`: Compiles TypeScript and creates an optimized production bundle in `dist/`.
+- `npm test`: Runs the automated test suite (244+ unit tests across calculations, JSON parsing, and database migration).
+- `npm run typecheck`: Runs the TypeScript compiler (`tsc --noEmit`) to verify type contracts.
+- `npm run lint`: Executes ESLint 9 to verify React rules, hook invariants, and code style.
+- `npm run preview`: Launches a local static server to preview production build artifacts.
 
 ---
 
-## Testing & Quality Verification
+## Dexie.js (IndexedDB) Persistence & Migration
 
-Unit tests execute without external heavyweight harnesses via Node's ESM runtime:
+### Database Overview
+The application persists all structured business data in **IndexedDB** using **Dexie.js** (`InvoiceAppDB`).
 
-```bash
-npm test
+- **`invoices`**: Primary invoice records indexed by `id`, `number`, `date`, `IsGST`, `IsIGST`, `template`, `recipient.name`, and `recipient.gstNumber`.
+- **`clients`**: Customer directory indexed by `id`, `name`, `mobile`, `email`, `gstNumber`, and `createdAt`.
+- **`items`**: Catalog items indexed by `id`, `name`, `hsnSac`, `defaultPrice`, and `createdAt`.
+- **`companies`**: Multi-company profiles indexed by `id`, `name`, `gstNumber`, and `isDefault`.
+- **`settings`**: Configuration key-value store indexed by `key`.
+
+### Automatic Startup Migration
+When the application loads, `AppBootstrap` runs `initializeDatabaseAndMigrate()`:
+1. **Detection & Locking**: Checks `invoice_app_dexie_migrated`. If unmigrated, sets a lock flag to prevent tab collision.
+2. **Safety Backup**: Creates an unmolested snapshot of raw localStorage data in `invoice_app_data_backup_pre_dexie`.
+3. **Data Transformation**: Normalizes all legacy invoice records via `transformInvoiceForDexie`, standardizing `IsGST` and `IsIGST` and stripping legacy properties.
+4. **Atomic Write**: Inserts all records within an atomic Dexie read-write transaction (`bulkPut`).
+5. **Cache Hydration**: Populates synchronous in-memory caches before rendering the UI to avoid blank screen flickers.
+
+*Note: `localStorage` is no longer used for primary business records; its usage is strictly limited to pre-migration backups, migration status markers, and concurrency locks.*
+
+---
+
+## JSON Invoice Import & Data Model
+
+### Authoritative GST Contract
+All invoice models in the application strictly use two boolean properties:
+- `IsGST: boolean` — Master toggle for tax calculation (Default: `false`).
+- `IsIGST: boolean` — Interstate tax flag (meaningful only when `IsGST` is `true`).
+
+Alternative names (`isGST`, `isIGST`, `gst`, `taxEnabled`) have been completely eliminated.
+
+### JSON Import Format (`RawJsonInvoice`)
+Invoices can be imported from JSON via the **Create from JSON** feature:
+
+```json
+{
+  "invoiceNumber": "INV-2026-101",
+  "issueDate": "2026-11-17",
+  "dueDate": "2026-12-01",
+  "template": "modern_indigo",
+  "IsGST": true,
+  "IsIGST": false,
+  "currency": "₹",
+  "client": {
+    "name": "Acme Logistics",
+    "mobile": "9876543210",
+    "email": "billing@acmelogistics.com",
+    "address": "12 Port Highway, Ahmedabad",
+    "gstNumber": "24ABCDE1234F1Z5",
+    "state": "24-Gujarat"
+  },
+  "items": [
+    {
+      "description": "Freight & Transport Charges",
+      "quantity": 1,
+      "price": 18500,
+      "hsnSac": "9965",
+      "unit": "Trip",
+      "gstRate": 18
+    }
+  ],
+  "discountType": "fixed",
+  "discountValue": 500,
+  "discountLabel": "Promotional Discount",
+  "notes": "Payment due within 15 days."
+}
 ```
-
-Test coverage includes:
-- **`invoiceCalculations.test.js`**: Verifies intra-state GST (CGST/SGST), interstate IGST, percentage vs. fixed discounts, payment balances, and edge cases (empty or null invoices).
-- **`numberToWords.test.js`**: Validates boundary values (Zero, Units, Tens, Hundreds, Thousands, and decimal Paise fractions).
-- **`validation.test.js`**: Validates statutory GSTIN formats (15 alphanumeric characters), RFC email patterns, and mobile phone lengths.
-- **`templates.test.js`**: Validates template registry uniqueness, layout integrity, and fallback resolution.
 
 ---
 
 ## Performance & Bundling Strategy
 
-To ensure sub-second First Contentful Paint (FCP) and optimal caching:
+To ensure optimal initial load times and responsiveness:
 
-1. **Route-Level Code Splitting**: All pages are dynamically imported via `React.lazy` and wrapped in `Suspense` inside `src/App.jsx`.
-2. **Deterministic Vendor Chunks**: `vite.config.js` organizes dependencies into modular chunks:
-   - `react-vendor`: React runtime, DOM, and Router (~45 kB).
-   - `charts-vendor`: Recharts data visualization library (~361 kB, loaded only on analytics views).
-   - `excel-vendor`: XLSX spreadsheet library (~282 kB, loaded only on export).
-   - `pdf-vendor`: html2pdf and rendering engine (~975 kB, isolated from main initial payload).
-3. **Optimized Initial Bundle**: Initial entry payload is reduced to ~195 kB (~62 kB gzipped), preventing heavy export dependencies from blocking initial dashboard interactions.
+1. **Route-Level Code Splitting**: All pages are dynamically loaded with `React.lazy` and wrapped in `Suspense`.
+2. **Manual Vendor Chunking**:
+   - `react-vendor`: Core React and Router dependencies.
+   - `charts-vendor`: Recharts data visualization library (loaded only on analytics views).
+   - `excel-vendor`: XLSX spreadsheet generator (loaded only on export).
+   - `pdf-vendor`: html2pdf and rendering engine (isolated from main initial bundle).
+   - `dexie-react-hooks`: Reactive Dexie integration.
+3. **Reactive UI with `useLiveQuery`**: React components subscribe to table updates using `useLiveQuery`, ensuring real-time dashboard updates without manual state polling.
 
 ---
 
 ## Build & Deployment
 
 ### Building for Production
-
 ```bash
 npm run build
 ```
-The optimized production bundle will be generated in `dist/`.
+Vite compiles and minifies the code into `dist/`.
 
-### Deployment Options
-
-- **Vercel / Netlify / Cloudflare Pages**: Connect the Git repository and set:
-  - **Build Command**: `npm run build`
-  - **Output Directory**: `dist`
-  - **SPA Rewrites**: Route all traffic to `index.html` (e.g. via `public/_redirects` or `vercel.json` if required).
-- **Static Nginx Server**:
-  ```nginx
-  server {
-      listen 80;
-      server_name your-domain.com;
-      root /var/www/invoice-app/dist;
-      index index.html;
-
-      location / {
-          try_files $uri $uri/ /index.html;
-      }
-  }
-  ```
+### Deployment Checklist
+- **SPA Rewrites**: Ensure your hosting provider (Vercel, Netlify, Cloudflare Pages, Nginx) routes all unmatched paths to `index.html`.
+- **Private Browsing Support**: Dexie.js operates across all modern browsers. In strict private modes that disable IndexedDB, the application gracefully alerts the user via the `AppBootstrap` error boundary.
 
 ---
 
-## Contributing & Standards
+## Developer Guidelines & Standards
 
-1. Follow the **Code Commenting Policy**: Never write trivial comments that restate self-evident code. Document *why*, not *what*.
-2. Ensure `npm run lint` and `npm test` pass before committing.
-3. Keep business logic and formulas inside `src/utils` or `src/services` rather than hardcoding them inside React JSX components.
+1. **Storage Encapsulation**: Never query or mutate Dexie tables directly from React components. Always interface through `src/services/`.
+2. **UI Subscriptions**: Use `useLiveQuery` from `dexie-react-hooks` for reactive table queries.
+3. **Strict Data Models**: Maintain single agreed property names throughout all code. Use `IsGST` and `IsIGST` exclusively.
+4. **Future Schema Upgrades**: Implement database changes via Dexie's declarative versioning (`this.version(2).stores({...}).upgrade(...)`). Do not wipe user tables.
+5. **Quality Gates**: Ensure `npm test`, `npm run typecheck`, and `npm run lint` pass before submitting pull requests.

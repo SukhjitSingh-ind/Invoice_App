@@ -1,134 +1,142 @@
-const STORAGE_KEY = 'invoice_app_clients';
+import { db } from '../db/db.js';
+
+let cachedClients = [];
 
 /**
- * Get all clients from localStorage
- * @returns {Array} Array of client objects
+ * Hydrates clients cache from Dexie.
+ * @returns {Promise<Array>}
  */
-export const getAllClients = () => {
+export const loadClientsFromDb = async () => {
     try {
-        const data = localStorage.getItem(STORAGE_KEY);
-        if (!data) {
-            return [];
-        }
-        return JSON.parse(data);
+        const clients = await db.clients.toArray();
+        cachedClients = clients;
+        return clients;
     } catch (error) {
-        console.error('Error loading clients:', error);
-        return [];
+        console.error('Error loading clients from Dexie:', error);
+        return cachedClients;
     }
 };
 
 /**
- * Save all clients to localStorage
- * @param {Array} clients - Array of client objects
+ * Get all clients (sync from cache, fallback empty)
+ * @returns {Array} Array of client objects
  */
-const saveClients = (clients) => {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(clients));
-    } catch (error) {
-        console.error('Error saving clients:', error);
-    }
+export const getAllClients = () => {
+    return cachedClients;
+};
+
+/**
+ * Get all clients asynchronously directly from Dexie
+ * @returns {Promise<Array>}
+ */
+export const getAllClientsAsync = async () => {
+    return await loadClientsFromDb();
 };
 
 /**
  * Get single client by ID
  * @param {number|string} id - Client ID
- * @returns {Object|null} Client object or null if not found
+ * @returns {Promise<Object|null>} Client object or null if not found
  */
-export const getClient = (id) => {
-    const clients = getAllClients();
-    const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-    return clients.find(client => client.id === numId) || null;
+export const getClient = async (id) => {
+    if (id === null || id === undefined) return null;
+    let client = await db.clients.get(id);
+    if (!client && typeof id === 'string') {
+        const numId = Number(id);
+        if (!isNaN(numId)) client = await db.clients.get(numId);
+    }
+    if (!client) {
+        client = await db.clients.filter(c => String(c.id) === String(id)).first();
+    }
+    return client || null;
 };
 
 /**
  * Create a new client
- * @param {Object} clientData - Client data for the new client
- * @returns {Object} The newly created client object
+ * @param {Object} clientData
+ * @returns {Promise<Object>}
  */
-export const createClient = (clientData) => {
-    const clients = getAllClients();
+export const createClient = async (clientData) => {
     const newClient = {
         id: Date.now(),
         ...clientData,
         createdAt: new Date().toISOString()
     };
-    clients.push(newClient);
-    saveClients(clients);
+    await db.clients.put(newClient);
+    await loadClientsFromDb();
     return newClient;
 };
 
 /**
  * Update an existing client by ID
- * @param {number|string} id - The ID of the client to update
- * @param {Object} clientData - The data to update the client with
- * @returns {Object|null} The updated client object, or null if not found
+ * @param {number|string} id
+ * @param {Object} clientData
+ * @returns {Promise<Object|null>}
  */
-export const updateClient = (id, clientData) => {
-    const clients = getAllClients();
-    const index = clients.findIndex(c => c.id === id);
-    if (index !== -1) {
-        clients[index] = {
-            ...clients[index],
-            ...clientData,
-            id, // Preserve the original ID
-            updatedAt: new Date().toISOString()
-        };
-        saveClients(clients);
-        return clients[index];
-    }
-    return null;
+export const updateClient = async (id, clientData) => {
+    const existing = await getClient(id);
+    if (!existing) return null;
+
+    const updated = {
+        ...existing,
+        ...clientData,
+        id: existing.id,
+        updatedAt: new Date().toISOString()
+    };
+    await db.clients.put(updated);
+    await loadClientsFromDb();
+    return updated;
 };
 
 /**
  * Update or Insert a client based on Name match
- * @param {Object} clientData - Client data to save
- * @returns {Object} The saved client object
+ * @param {Object} clientData
+ * @returns {Promise<Object>}
  */
-export const upsertClient = (clientData) => {
-    const clients = getAllClients();
-    // Normalize name for comparison
+export const upsertClient = async (clientData) => {
     const searchName = (clientData.name || '').trim().toLowerCase();
+    if (!searchName) return null;
 
-    // Find existing client by name
-    const existingClient = clients.find(c => (c.name || '').trim().toLowerCase() === searchName);
+    const existingClient = await db.clients
+        .filter(c => (c.name || '').trim().toLowerCase() === searchName)
+        .first();
 
     if (existingClient) {
-        // Update existing, but preserve fields if new data is empty
         const updatedData = { ...clientData };
         if (!updatedData.mobile && existingClient.mobile) updatedData.mobile = existingClient.mobile;
         if (!updatedData.email && existingClient.email) updatedData.email = existingClient.email;
         if (!updatedData.gstNumber && existingClient.gstNumber) updatedData.gstNumber = existingClient.gstNumber;
         if (!updatedData.address && existingClient.address) updatedData.address = existingClient.address;
 
-        return updateClient(existingClient.id, updatedData);
+        return await updateClient(existingClient.id, updatedData);
     } else {
-        // Create new
-        return createClient(clientData);
+        return await createClient(clientData);
     }
 };
 
 /**
  * Save client (create or update)
- * @param {Object} client - Client object
- * @returns {Object} Saved client object
+ * @param {Object} client
+ * @returns {Promise<Object>}
  */
-export const saveClient = (client) => {
+export const saveClient = async (client) => {
     if (client.id) {
-        return updateClient(client.id, client);
+        return await updateClient(client.id, client);
     }
-    return createClient(client);
+    return await createClient(client);
 };
 
 /**
  * Delete client by ID
- * @param {number|string} id - Client ID
- * @returns {boolean} Success status
+ * @param {number|string} id
+ * @returns {Promise<boolean>}
  */
-export const deleteClient = (id) => {
+export const deleteClient = async (id) => {
     try {
-        let clients = getAllClients();
-        clients = clients.filter(client => String(client.id) !== String(id));
-        saveClients(clients);
+        const existing = await getClient(id);
+        const targetId = existing ? existing.id : id;
+        await db.clients.delete(targetId);
+        await loadClientsFromDb();
         return true;
     } catch (error) {
         console.error('Error deleting client:', error);
@@ -138,7 +146,7 @@ export const deleteClient = (id) => {
 
 /**
  * Create empty client object
- * @returns {Object} Empty client object with default values
+ * @returns {Object}
  */
 export const createEmptyClient = () => {
     return {
@@ -152,11 +160,11 @@ export const createEmptyClient = () => {
 
 /**
  * Export all clients to a downloadable JSON file
- * @returns {void}
+ * @returns {Promise<void>}
  */
-export const exportClientsToJSON = () => {
+export const exportClientsToJSON = async () => {
     try {
-        const clients = getAllClients();
+        const clients = await db.clients.toArray();
         const jsonString = JSON.stringify(clients, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -178,11 +186,10 @@ export const exportClientsToJSON = () => {
 
 /**
  * Import clients from a JSON string
- * @param {string} jsonData - JSON string containing client data
- * @returns {Object} Object with success status and count of imported clients
- * @throws {Error} If JSON is invalid or has incorrect structure
+ * @param {string} jsonData
+ * @returns {Promise<Object>}
  */
-export const importClientsFromJSON = (jsonData) => {
+export const importClientsFromJSON = async (jsonData) => {
     try {
         const importedClients = JSON.parse(jsonData);
 
@@ -198,15 +205,16 @@ export const importClientsFromJSON = (jsonData) => {
         }
 
         let importedCount = 0;
-        importedClients.forEach(clientData => {
+        for (const clientData of importedClients) {
             const cleanClientData = { ...clientData };
             delete cleanClientData.id;
             delete cleanClientData.createdAt;
             delete cleanClientData.updatedAt;
-            upsertClient(cleanClientData);
+            await upsertClient(cleanClientData);
             importedCount++;
-        });
+        }
 
+        await loadClientsFromDb();
         return {
             success: true,
             count: importedCount

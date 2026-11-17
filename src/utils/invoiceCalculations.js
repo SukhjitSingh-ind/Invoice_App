@@ -35,7 +35,7 @@ export function calculateInvoiceTotals(invoice) {
     return sum + quantity * price;
   }, 0);
 
-  const taxAmount = invoice.isGST
+  const taxAmount = invoice.IsGST
     ? items.reduce((sum, item) => {
         const quantity = toNumber(item.quantity || 0);
         const price = toNumber(item.price || 0);
@@ -46,9 +46,9 @@ export function calculateInvoiceTotals(invoice) {
       }, 0)
     : 0;
 
-  const igstAmount = invoice.isGST && invoice.isIGST ? taxAmount : 0;
-  const cgstAmount = invoice.isGST && !invoice.isIGST ? taxAmount / 2 : 0;
-  const sgstAmount = invoice.isGST && !invoice.isIGST ? taxAmount / 2 : 0;
+  const igstAmount = invoice.IsGST && invoice.IsIGST ? taxAmount : 0;
+  const cgstAmount = invoice.IsGST && !invoice.IsIGST ? taxAmount / 2 : 0;
+  const sgstAmount = invoice.IsGST && !invoice.IsIGST ? taxAmount / 2 : 0;
 
   const preDiscountTotal = subtotal + taxAmount;
 

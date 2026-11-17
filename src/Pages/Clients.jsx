@@ -1,12 +1,15 @@
-import React, { useState, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Users, Plus, Search, Edit2, Trash2, X, Save, Mail, Phone, MapPin, FileText, Download, Upload } from 'lucide-react';
-import { getAllClients, saveClient, deleteClient, createEmptyClient, exportClientsToJSON, importClientsFromJSON } from '../services/clientService';
-import { getSettings } from '../services/settingsService';
-import { validateGST, validateEmail, validatePhone } from '../utils/validation';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db.js';
+import { saveClient, deleteClient, createEmptyClient, exportClientsToJSON, importClientsFromJSON } from '../services/clientService.js';
+import { getSettings } from '../services/settingsService.js';
+import { validateGST, validateEmail, validatePhone } from '../utils/validation.js';
 import { useToast } from '../components/Toast';
 
 export default function Clients() {
-    const [clients, setClients] = useState(() => getAllClients());
+    const liveClients = useLiveQuery(() => db.clients.toArray(), []);
+    const clients = useMemo(() => liveClients || [], [liveClients]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingClient, setEditingClient] = useState(null);
@@ -14,10 +17,6 @@ export default function Clients() {
     const [deleteConfirm, setDeleteConfirm] = useState(null);
     const { addToast } = useToast();
     const fileInputRef = useRef(null);
-
-    const loadClients = useCallback(() => {
-        setClients(getAllClients());
-    }, []);
 
     const filteredClients = useMemo(() => {
         const query = searchQuery.toLowerCase().trim();
@@ -46,7 +45,7 @@ export default function Clients() {
         setFormData(createEmptyClient());
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         const settings = getSettings();
         if (!formData.name.trim()) {
             addToast('Name is required!', 'error');
@@ -73,8 +72,7 @@ export default function Clients() {
             return;
         }
 
-        saveClient(formData);
-        loadClients();
+        await saveClient(formData);
         handleCloseModal();
         addToast(editingClient ? 'Client updated successfully!' : 'Client created successfully!', 'success');
     };
@@ -83,10 +81,9 @@ export default function Clients() {
         setDeleteConfirm(id);
     };
 
-    const confirmDelete = () => {
+    const confirmDelete = async () => {
         if (deleteConfirm) {
-            deleteClient(deleteConfirm);
-            loadClients();
+            await deleteClient(deleteConfirm);
             setDeleteConfirm(null);
         }
     };
@@ -100,9 +97,9 @@ export default function Clients() {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleExport = () => {
+    const handleExport = async () => {
         try {
-            exportClientsToJSON();
+            await exportClientsToJSON();
             addToast('Clients exported successfully!', 'success');
         } catch {
             addToast('Failed to export clients', 'error');
@@ -122,8 +119,7 @@ export default function Clients() {
 
         try {
             const text = await file.text();
-            const result = importClientsFromJSON(text);
-            loadClients();
+            const result = await importClientsFromJSON(text);
             addToast(`Successfully imported ${result.count} client(s)!`, 'success');
         } catch (error) {
             addToast(error.message || 'Failed to import clients', 'error');

@@ -70,7 +70,7 @@ export default function YourDetails() {
         }
     };
 
-    const handleAddProfile = () => {
+    const handleAddProfile = async () => {
         const newProfile = {
             name: 'New Company',
             address: '',
@@ -86,7 +86,7 @@ export default function YourDetails() {
             },
             logo: ''
         };
-        const created = addCompanyProfile(newProfile);
+        const created = await addCompanyProfile(newProfile);
         setProfiles(prev => [...prev, created]);
         setSelectedProfileId(created.id);
         setFormData(created);
@@ -105,11 +105,11 @@ export default function YourDetails() {
         setDeleteConfirm(id);
     };
 
-    const confirmDelete = () => {
+    const confirmDelete = async () => {
         if (!deleteConfirm) return;
 
         const id = deleteConfirm;
-        const success = deleteCompanyProfile(id);
+        const success = await deleteCompanyProfile(id);
 
         if (success) {
             addToast('Profile deleted', 'success');
@@ -126,9 +126,9 @@ export default function YourDetails() {
         setDeleteConfirm(null);
     };
 
-    const handleSetGlobalActive = (e, id) => {
+    const handleSetGlobalActive = async (e, id) => {
         e.stopPropagation();
-        setActiveProfile(id);
+        await setActiveProfile(id);
         setActiveProfileId(id);
         addToast('Active profile updated', 'success');
     };
@@ -172,7 +172,7 @@ export default function YourDetails() {
         }
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!formData.name.trim()) {
             addToast('Company Name is required', 'error');
             return;
@@ -182,7 +182,7 @@ export default function YourDetails() {
             addToast('Company Logo is required', 'error');
             return;
         }
-        updateCompanyProfile(selectedProfileId, formData);
+        await updateCompanyProfile(selectedProfileId, formData);
         setIsDirty(false);
         loadData(); // Refresh list to show updated names etc
         addToast('Profile saved successfully', 'success');

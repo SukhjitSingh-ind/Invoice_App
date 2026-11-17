@@ -1,93 +1,118 @@
-import { getActiveProfile } from './settingsService';
-const STORAGE_KEY = 'invoice_app_data';
+import { db } from '../db/db.js';
+import { getActiveProfile } from './settingsService.js';
+import { upsertClient } from './clientService.js';
+import { transformInvoiceForDexie, DEFAULT_INITIAL_INVOICES } from './migrationService.js';
 
-// Default initial data to start with if storage is empty
-const INITIAL_DATA = [
-    {
-        id: 1731427200000, // Timestamp as ID
-        number: '#9',
-        date: '2025-11-22',
-        sender: {
-            name: 'GK AUTO ELECTRIC WORKS',
-            address: 'ISHWAR ARCADE shop no 11 asalali Cross\nroad nearby Kheda road Ahmedabad Gujarat.',
-            phone: '',
-            gstNumber: ''
-        },
-        recipient: {
-            name: 'Guru Kripa Crane Service',
-            mobile: '8141378031'
-        },
-        items: [
-            { id: 1, description: 'Bosch ECM Repairing', quantity: 1, price: 25500 },
-            { id: 2, description: 'Mundra Breakdown Service Charge', quantity: 1, price: 10000 },
-            { id: 3, description: 'Laptop Scanning', quantity: 1, price: 3500 },
-            { id: 4, description: 'Mundra Up/Down Service (Travel/Transport)', quantity: 1, price: 3500 },
-            { id: 5, description: 'Mundra breakdown service ECM wiring check', quantity: 1, price: 7500 }
-        ],
-        currency: '₹',
-        notes: 'Zoomlion Crane (80 Ton)',
-        paymentInfo: '8141378031mokbizar',
-        template: 'default'
+export const migrateInvoiceRecord = (inv) => {
+    const transformed = transformInvoiceForDexie(inv);
+    const wasModified = Object.prototype.hasOwnProperty.call(inv || {}, 'isGST') ||
+                        Object.prototype.hasOwnProperty.call(inv || {}, 'isIGST') ||
+                        !Object.prototype.hasOwnProperty.call(inv || {}, 'IsGST');
+    return { migrated: transformed, wasModified };
+};
+
+let cachedInvoices = [];
+
+/**
+ * Hydrates invoices cache from Dexie.
+ * @returns {Promise<Array>}
+ */
+export const loadInvoicesFromDb = async () => {
+    try {
+        const invoices = await db.invoices.toArray();
+        cachedInvoices = invoices;
+        return invoices;
+    } catch (error) {
+        console.error('Error loading invoices from Dexie:', error);
+        return cachedInvoices;
     }
-];
+};
 
+/**
+ * Get all invoices (sync from cache, fallback empty)
+ * @returns {Array} Array of invoice objects
+ */
 export const getAllInvoices = () => {
-    try {
-        const data = localStorage.getItem(STORAGE_KEY);
-        if (!data) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_DATA));
-            return INITIAL_DATA;
-        }
-        return JSON.parse(data);
-    } catch (error) {
-        console.error('Error loading invoices:', error);
-        return INITIAL_DATA;
+    return cachedInvoices;
+};
+
+/**
+ * Get all invoices asynchronously directly from Dexie
+ * @returns {Promise<Array>}
+ */
+export const getAllInvoicesAsync = async () => {
+    return await loadInvoicesFromDb();
+};
+
+/**
+ * Get single invoice by ID with type normalization (number or UUID string)
+ * @param {number|string} id - Invoice ID
+ * @returns {Promise<Object|null>} Invoice object or null if not found
+ */
+export const getInvoice = async (id) => {
+    if (id === null || id === undefined) return null;
+    let inv = await db.invoices.get(id);
+    if (!inv && typeof id === 'string') {
+        const numId = Number(id);
+        if (!isNaN(numId)) inv = await db.invoices.get(numId);
     }
+    if (!inv) {
+        inv = await db.invoices.filter(i => String(i.id) === String(id)).first();
+    }
+    return inv || null;
 };
 
-export const getInvoice = (id) => {
-    const invoices = getAllInvoices();
-    const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-    return invoices.find(inv => inv.id === numId);
-};
-
-export const saveInvoice = (invoice) => {
+/**
+ * Save an invoice to Dexie.
+ * Automatically generates UUID if missing, and auto-upserts client.
+ * @param {Object} invoice
+ * @returns {Promise<Object>}
+ */
+export const saveInvoice = async (invoice) => {
     try {
-        const invoices = getAllInvoices();
-        if (invoice.id) {
-            const index = invoices.findIndex(inv => inv.id === invoice.id);
-            if (index !== -1) {
-                invoices[index] = invoice;
-            } else {
-                invoices.push(invoice);
+        const toSave = transformInvoiceForDexie(invoice);
+
+        await db.transaction('rw', [db.invoices, db.clients], async () => {
+            if (toSave.recipient && toSave.recipient.name) {
+                await upsertClient(toSave.recipient);
             }
-        } else {
-            invoice.id = Date.now();
-            invoices.push(invoice);
-        }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
-        return invoice;
+            await db.invoices.put(toSave);
+        });
+
+        await loadInvoicesFromDb();
+        return toSave;
     } catch (error) {
-        console.error('Error saving invoice:', error);
-        return invoice;
+        console.error('Error saving invoice to Dexie:', error);
+        throw error;
     }
 };
 
-export const deleteInvoice = (id) => {
+/**
+ * Delete an invoice from Dexie by ID
+ * @param {number|string} id
+ * @returns {Promise<boolean>}
+ */
+export const deleteInvoice = async (id) => {
     try {
-        let invoices = getAllInvoices();
-        const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-        invoices = invoices.filter(inv => inv.id !== numId);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
+        const existing = await getInvoice(id);
+        const targetId = existing ? existing.id : id;
+        await db.invoices.delete(targetId);
+        await loadInvoicesFromDb();
         return true;
     } catch (error) {
-        console.error('Error deleting invoice:', error);
+        console.error('Error deleting invoice from Dexie:', error);
         return false;
     }
 };
 
-export const createEmptyInvoice = () => {
-    const profile = getActiveProfile();
+/**
+ * Creates an empty invoice data structure.
+ * Guaranteed to default IsGST to false and IsIGST to false.
+ * @param {Object} [overrideProfile] - Optional active company profile
+ * @returns {Object}
+ */
+export const createEmptyInvoice = (overrideProfile = null) => {
+    const profile = overrideProfile || getActiveProfile();
     const defaults = {
         name: '',
         address: '',
@@ -102,7 +127,6 @@ export const createEmptyInvoice = () => {
         }
     };
 
-    // Use profile data or fallbacks
     const sender = profile || defaults;
 
     return {
@@ -114,8 +138,7 @@ export const createEmptyInvoice = () => {
             phone: sender.phone || '',
             email: sender.email || '',
             gstNumber: sender.gstNumber || '',
-            // If profile has specific state logic, add it here, otherwise default or manual
-            state: sender.state || '24-Gujarat' // Default if not set
+            state: sender.state || '24-Gujarat'
         },
         recipient: {
             name: '',
@@ -136,8 +159,8 @@ export const createEmptyInvoice = () => {
             ifscCode: sender.bankDetails?.ifscCode || '',
             accountHolder: sender.bankDetails?.accountHolder || ''
         },
-        isGST: false,
-        isIGST: false,
+        IsGST: false,
+        IsIGST: false,
         gstRate: 18,
         cgst: 9,
         sgst: 9,
@@ -153,28 +176,34 @@ export const createEmptyInvoice = () => {
     };
 };
 
-export const getNextInvoiceNumber = () => {
-    const invoices = getAllInvoices();
+/**
+ * Calculates next invoice number based on existing records in Dexie
+ * @returns {Promise<string>}
+ */
+export const getNextInvoiceNumber = async () => {
+    const invoices = await db.invoices.toArray();
     if (invoices.length === 0) return '1';
 
-    // Sort by integer ID (timestamp) descending to get truly latest created
-    const sorted = [...invoices].sort((a, b) => b.id - a.id);
+    const sorted = [...invoices].sort((a, b) => {
+        if (typeof a.id === 'number' && typeof b.id === 'number') {
+            return b.id - a.id;
+        }
+        const timeA = a.date ? new Date(a.date).getTime() : 0;
+        const timeB = b.date ? new Date(b.date).getTime() : 0;
+        return timeB - timeA;
+    });
     const lastInvoice = sorted[0];
-    const lastNumStr = lastInvoice.number || '';
+    const lastNumStr = lastInvoice?.number || '';
 
-    // Try to match pattern ending in number: Prefix + Number
-    // e.g. "INV-009" or "#9"
     const match = lastNumStr.match(/^(.*?)(\d+)$/);
     if (match) {
         const prefix = match[1];
         const numStr = match[2];
         const nextNum = parseInt(numStr, 10) + 1;
-        // Preserve zero padding logic
         const paddedNum = nextNum.toString().padStart(numStr.length, '0');
         return prefix + paddedNum;
     }
 
-    // Fallback: Max of all specific numbers found
     let max = 0;
     invoices.forEach(inv => {
         const m = (inv.number || '').match(/\d+/);
@@ -187,20 +216,30 @@ export const getNextInvoiceNumber = () => {
     return (max > 0 ? max + 1 : invoices.length + 1).toString();
 };
 
-export const checkInvoiceNumberExists = (number, excludeId = null) => {
-    const invoices = getAllInvoices();
+/**
+ * Checks whether an invoice number already exists in Dexie
+ * @param {string} number
+ * @param {number|string|null} [excludeId]
+ * @returns {Promise<boolean>}
+ */
+export const checkInvoiceNumberExists = async (number, excludeId = null) => {
+    const invoices = await db.invoices.toArray();
     const normalize = n => (n || '').trim().toLowerCase();
     const target = normalize(number);
 
     return invoices.some(inv =>
         normalize(inv.number) === target &&
-        inv.id !== excludeId
+        (excludeId === null || (inv.id !== excludeId && String(inv.id) !== String(excludeId)))
     );
 };
 
-export const exportInvoices = () => {
+/**
+ * Export all invoices to a downloadable JSON backup
+ * @returns {Promise<boolean>}
+ */
+export const exportInvoices = async () => {
     try {
-        const invoices = getAllInvoices();
+        const invoices = await db.invoices.toArray();
         const dataStr = JSON.stringify(invoices, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -219,7 +258,13 @@ export const exportInvoices = () => {
     }
 };
 
-export const importInvoices = (jsonData) => {
+/**
+ * Import invoices from a JSON string into Dexie.
+ * Applies transformInvoiceForDexie to enforce canonical GST contract.
+ * @param {string} jsonData
+ * @returns {Promise<object>}
+ */
+export const importInvoices = async (jsonData) => {
     try {
         const newInvoices = JSON.parse(jsonData);
 
@@ -227,25 +272,27 @@ export const importInvoices = (jsonData) => {
             throw new Error('Invalid data format: Expected an array of invoices');
         }
 
-        const currentInvoices = getAllInvoices();
         let addedCount = 0;
         let updatedCount = 0;
 
-        newInvoices.forEach(newInv => {
-            if (!newInv.id || !newInv.number) return;
+        await db.transaction('rw', db.invoices, async () => {
+            for (const rawInv of newInvoices) {
+                if (!rawInv || typeof rawInv !== 'object' || !rawInv.number) continue;
 
-            const index = currentInvoices.findIndex(inv => inv.id === newInv.id);
-            if (index !== -1) {
-                // Upsert: Overwrite existing local record on restore
-                currentInvoices[index] = newInv;
-                updatedCount++;
-            } else {
-                currentInvoices.push(newInv);
-                addedCount++;
+                const newInv = transformInvoiceForDexie(rawInv);
+                const existing = await getInvoice(newInv.id);
+
+                if (existing) {
+                    await db.invoices.put(newInv);
+                    updatedCount++;
+                } else {
+                    await db.invoices.put(newInv);
+                    addedCount++;
+                }
             }
         });
 
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(currentInvoices));
+        await loadInvoicesFromDb();
         return { success: true, added: addedCount, updated: updatedCount };
     } catch (error) {
         console.error('Error importing invoices:', error);

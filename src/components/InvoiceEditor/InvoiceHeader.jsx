@@ -42,7 +42,7 @@ export default function InvoiceHeader({ invoice, handleChange, settings, validat
                             placeholder="Seller Mobile Number"
                         />
                     </div>
-                    {invoice.isGST && (
+                    {invoice.IsGST && (
                         <>
                             <div className="flex items-center gap-2 mt-1">
                                 <span className="text-sm font-bold text-slate-400">GSTIN:</span>
@@ -68,18 +68,18 @@ export default function InvoiceHeader({ invoice, handleChange, settings, validat
             </div>
 
             <div className="flex justify-center mb-8">
-                <h2 className="text-3xl font-black tracking-widest border-b-4 border-black pb-1">{invoice.isGST ? 'TAX INVOICE' : 'INVOICE'}</h2>
+                <h2 className="text-3xl font-black tracking-widest border-b-4 border-black pb-1">{invoice.IsGST ? 'TAX INVOICE' : 'INVOICE'}</h2>
             </div>
 
             {/* Place of Supply - GST only */}
-            {invoice.isGST && (
+            {invoice.IsGST && (
                 <div className="mb-4 text-center">
                     <div className="flex justify-center gap-6 mb-2">
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input
                                 type="checkbox"
-                                checked={invoice.isIGST || false}
-                                onChange={(e) => handleChange('isIGST', null, e.target.checked)} // Special case handled in parent or adapt handleChange
+                                checked={invoice.IsIGST || false}
+                                onChange={(e) => handleChange('IsIGST', null, e.target.checked)} // Special case handled in parent or adapt handleChange
                                 className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
                             />
                             <span className="text-sm font-bold text-slate-700">IGST (Inter-state)</span>
@@ -121,7 +121,7 @@ export default function InvoiceHeader({ invoice, handleChange, settings, validat
                         />
                     </div>
 
-                    {invoice.isGST && (
+                    {invoice.IsGST && (
                         <>
                             <textarea
                                 value={invoice.recipient.address || ''}

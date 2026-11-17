@@ -36,7 +36,7 @@ export default function InvoiceItemsTable({
                                 Item Description {getSortIcon('description')}
                             </div>
                         </th>
-                        {invoice.isGST && <th className="py-3 text-center font-bold text-sm uppercase tracking-wider w-24">HSN/SAC</th>}
+                        {invoice.IsGST && <th className="py-3 text-center font-bold text-sm uppercase tracking-wider w-24">HSN/SAC</th>}
                         <th
                             className="py-3 text-center font-bold text-sm uppercase tracking-wider w-20 cursor-pointer group hover:bg-slate-50 transition-colors"
                             onClick={() => handleSort('quantity')}
@@ -53,7 +53,7 @@ export default function InvoiceItemsTable({
                                 Rate {getSortIcon('price')}
                             </div>
                         </th>
-                        {invoice.isGST && <th className="py-3 text-center font-bold text-sm uppercase tracking-wider w-24">GST %</th>}
+                        {invoice.IsGST && <th className="py-3 text-center font-bold text-sm uppercase tracking-wider w-24">GST %</th>}
                         <th
                             className="py-3 text-right font-bold text-sm uppercase tracking-wider w-32 cursor-pointer group hover:bg-slate-50 transition-colors"
                             onClick={() => handleSort('amount')}
@@ -78,7 +78,7 @@ export default function InvoiceItemsTable({
                                         }`}
                                 />
                             </td>
-                            {invoice.isGST && (
+                            {invoice.IsGST && (
                                 <td className="py-2">
                                     <input
                                         value={item.hsnSac || ''}
@@ -110,7 +110,7 @@ export default function InvoiceItemsTable({
                                         }`}
                                 />
                             </td>
-                            {invoice.isGST && (
+                            {invoice.IsGST && (
                                 <td className="py-2 px-2 text-center">
                                     <div className="flex flex-col items-center gap-1">
                                         <input
@@ -138,13 +138,13 @@ export default function InvoiceItemsTable({
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td colSpan={invoice.isGST ? "8" : "5"} className="pt-4">
+                        <td colSpan={invoice.IsGST ? "8" : "5"} className="pt-4">
                             <button onClick={addItem} className="w-full py-2 border-2 border-dashed border-slate-300 text-slate-400 font-bold rounded hover:border-blue-500 hover:text-blue-500 flex items-center justify-center gap-2 transition-all">
                                 <Plus size={20} /> Add New Item Line
                             </button>
                         </td>
                     </tr>
-                    {invoice.isGST && (
+                    {invoice.IsGST && (
                         <>
                             <tr className="border-t border-slate-200">
                                 <td colSpan="3" className="py-2 text-right font-bold pr-8">Subtotal</td>
@@ -153,7 +153,7 @@ export default function InvoiceItemsTable({
                                 </td>
                                 <td></td>
                             </tr>
-                            {invoice.isIGST ? (
+                            {invoice.IsIGST ? (
                                 <tr>
                                     <td colSpan="3" className="py-2 text-right pr-8">
                                         <span className="text-sm">IGST</span>

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { Plus, Trash2, ChevronRight, Eye, Save, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Package } from 'lucide-react';
-import { getInvoice, saveInvoice, createEmptyInvoice, getNextInvoiceNumber, checkInvoiceNumberExists } from '../services/invoiceService';
-import { getSettings, getActiveProfile } from '../services/settingsService';
-import { getClient, upsertClient } from '../services/clientService';
-import { getAllItems } from '../services/itemService';
+import { getInvoice, saveInvoice, createEmptyInvoice, getNextInvoiceNumber, checkInvoiceNumberExists } from '../services/invoiceService.js';
+import { transformInvoiceForDexie } from '../services/migrationService.js';
+import { getSettings, getActiveProfile } from '../services/settingsService.js';
+import { getClient } from '../services/clientService.js';
+import { getAllItems } from '../services/itemService.js';
 import { numberToWords } from '../utils/numberToWords';
 import { calculateInvoiceTotals } from '../utils/invoiceCalculations';
 import { validateGST } from '../utils/validation';
@@ -22,11 +23,12 @@ import InvoiceFooter from '../components/InvoiceEditor/InvoiceFooter';
 
 export default function InvoiceEditor() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const templateId = searchParams.get('template');
   const clientId = searchParams.get('clientId');
-  const isGSTParam = searchParams.get('gst') === 'true';
+  const hasGstParam = searchParams.get('IsGST') === 'true' || searchParams.get('gst') === 'true';
 
   const [settings] = useState(() => getSettings());
   const [libraryItems] = useState(() => getAllItems());
@@ -36,58 +38,116 @@ export default function InvoiceEditor() {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [showCustomization, setShowCustomization] = useState(false);
 
-  const [invoice, setInvoice] = useState(() => {
-    if (id && id !== 'new') {
-      return getInvoice(id) || null;
-    }
-    const newInv = createEmptyInvoice();
-    newInv.number = getNextInvoiceNumber();
-    if (templateId) newInv.template = templateId;
-
-    if (clientId) {
-      const clientData = getClient(clientId);
-      if (clientData) {
-        newInv.recipient.name = clientData.name;
-        newInv.recipient.mobile = clientData.mobile;
-        newInv.recipient.address = clientData.address || '';
-        if (clientData.gstNumber) {
-          newInv.recipient.gstNumber = clientData.gstNumber;
-        }
-      }
-    }
-
-    const activeProfile = getActiveProfile();
-    if (activeProfile) {
-      newInv.sender.name = activeProfile.name || newInv.sender.name;
-      newInv.sender.address = activeProfile.address || newInv.sender.address;
-      newInv.sender.phone = activeProfile.phone || newInv.sender.phone;
-      newInv.sender.gstNumber = activeProfile.gstNumber || newInv.sender.gstNumber;
-
-      if (activeProfile.bankDetails) {
-        newInv.bankDetails = {
-          ...(newInv.bankDetails || {}),
-          ...activeProfile.bankDetails,
-        };
-      }
-    }
-
-    if (isGSTParam) newInv.isGST = true;
-    return newInv;
-  });
-
-  const [customization, setCustomization] = useState(() => {
-    if (id && id !== 'new') {
-      const data = getInvoice(id);
-      return data?.customization || { backgroundColor: '', fontColor: '', backgroundImage: '' };
-    }
-    return { backgroundColor: '', fontColor: '', backgroundImage: '' };
-  });
+  const [invoice, setInvoice] = useState(null);
+  const [customization, setCustomization] = useState({ backgroundColor: '', fontColor: '', backgroundImage: '' });
 
   useEffect(() => {
-    if (id && id !== 'new' && !invoice) {
-      navigate('/');
+    let isMounted = true;
+
+    async function loadData() {
+      if (id && id !== 'new') {
+        const existing = await getInvoice(id);
+        if (isMounted) {
+          if (existing) {
+            setInvoice(existing);
+            if (existing.customization) {
+              setCustomization(existing.customization);
+            }
+          } else {
+            navigate('/');
+          }
+        }
+        return;
+      }
+
+      // Check if an invoice was imported from JSON via state or backup storage
+      let imported = location.state?.importedInvoice;
+      if (!imported) {
+        try {
+          const stored = sessionStorage.getItem('pending_imported_invoice');
+          if (stored) {
+            imported = JSON.parse(stored);
+            sessionStorage.removeItem('pending_imported_invoice');
+          }
+        } catch (e) {
+          console.error('Failed to parse pending imported invoice:', e);
+        }
+      } else {
+        try {
+          sessionStorage.removeItem('pending_imported_invoice');
+        } catch (e) {
+          console.warn('Could not clear pending_imported_invoice:', e);
+        }
+      }
+
+      if (imported) {
+        const transformed = transformInvoiceForDexie(imported);
+        if (isMounted) {
+          setInvoice(transformed);
+          if (transformed.customization) {
+            setCustomization(transformed.customization);
+          }
+        }
+        return;
+      }
+
+      const activeProfile = getActiveProfile();
+      const newInv = createEmptyInvoice(activeProfile);
+      newInv.number = await getNextInvoiceNumber();
+      if (templateId) newInv.template = templateId;
+
+      if (clientId) {
+        const clientData = await getClient(clientId);
+        if (clientData) {
+          newInv.recipient.name = clientData.name;
+          newInv.recipient.mobile = clientData.mobile;
+          newInv.recipient.address = clientData.address || '';
+          if (clientData.gstNumber) {
+            newInv.recipient.gstNumber = clientData.gstNumber;
+          }
+        }
+      }
+
+      if (hasGstParam) newInv.IsGST = true;
+
+      if (isMounted) {
+        setInvoice(newInv);
+      }
     }
-  }, [id, invoice, navigate]);
+
+    loadData();
+    return () => { isMounted = false; };
+  }, [id, templateId, clientId, hasGstParam, location.state, navigate]);
+
+  // Handle legacy URL param transition: ?gst=true -> ?IsGST=true
+  useEffect(() => {
+    if (searchParams.has('gst')) {
+      const val = searchParams.get('gst');
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('gst');
+      if (val === 'true') {
+        newParams.set('IsGST', 'true');
+      }
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  // Synchronize URL IsGST parameter when creating a new invoice
+  const isInvoiceGst = invoice?.IsGST === true;
+  useEffect(() => {
+    if (id === 'new') {
+      const currentParam = searchParams.get('IsGST');
+      if (isInvoiceGst && currentParam !== 'true') {
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('IsGST', 'true');
+        setSearchParams(newParams, { replace: true });
+      } else if (!isInvoiceGst && currentParam === 'true') {
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('IsGST');
+        setSearchParams(newParams, { replace: true });
+      }
+    }
+  }, [id, isInvoiceGst, searchParams, setSearchParams]);
 
   if (!invoice || !settings) return <div>Loading...</div>;
 
@@ -108,13 +168,13 @@ export default function InvoiceEditor() {
   const logoSrc = activeCompanyProfile?.logo || logoImg;
 
   // Validation
-  const validateInvoice = () => {
+  const validateInvoice = async () => {
     const errors = {};
 
     // Validate invoice number
     if (settings.validation.requireInvoiceNumber && !invoice.number.trim()) {
       errors.invoiceNumber = 'Invoice number is required';
-    } else if (checkInvoiceNumberExists(invoice.number, invoice.id)) {
+    } else if (await checkInvoiceNumberExists(invoice.number, invoice.id)) {
       errors.invoiceNumber = 'Invoice number already exists';
     }
 
@@ -129,12 +189,12 @@ export default function InvoiceEditor() {
     }
 
     // Validate GST Number
-    if (invoice.isGST && invoice.recipient.gstNumber && !validateGST(invoice.recipient.gstNumber)) {
+    if (invoice.IsGST && invoice.recipient.gstNumber && !validateGST(invoice.recipient.gstNumber)) {
       errors.gstNumber = 'Invalid GST Number format';
     }
 
     // Validate Seller GST Number
-    if (invoice.isGST && invoice.sender.gstNumber && !validateGST(invoice.sender.gstNumber)) {
+    if (invoice.IsGST && invoice.sender.gstNumber && !validateGST(invoice.sender.gstNumber)) {
       errors.sellerGstNumber = 'Invalid Seller GST Number format';
     }
 
@@ -161,15 +221,11 @@ export default function InvoiceEditor() {
   };
 
   // Handlers
-  const handleSave = () => {
-    if (!validateInvoice()) {
+  const handleSave = async () => {
+    const isValid = await validateInvoice();
+    if (!isValid) {
       addToast('Please fix the validation errors before saving.', 'error');
       return;
-    }
-
-    // Auto-save/Update client
-    if (invoice.recipient && invoice.recipient.name) {
-      upsertClient(invoice.recipient);
     }
 
     if (Object.keys(validationErrors).length > 0) {
@@ -178,9 +234,14 @@ export default function InvoiceEditor() {
       return;
     }
 
-    const savedInvoice = saveInvoice({ ...invoice, customization });
-    addToast('Invoice saved successfully!', 'success');
-    navigate(`/preview/${savedInvoice.id}`);
+    try {
+      const savedInvoice = await saveInvoice({ ...invoice, customization });
+      addToast('Invoice saved successfully!', 'success');
+      navigate(`/preview/${savedInvoice.id}`);
+    } catch (err) {
+      console.error('Save error:', err);
+      addToast('Failed to save invoice', 'error');
+    }
   };
 
   const handleChange = (section, field, value) => {
@@ -299,8 +360,14 @@ export default function InvoiceEditor() {
   };
 
   const handleChangeWrapper = (section, field, value) => {
-    if (section === 'isIGST') {
-      setInvoice(prev => ({ ...prev, isIGST: value }));
+    if (section === 'IsIGST') {
+      setInvoice(prev => ({ ...prev, IsIGST: value }));
+    } else if (section === 'IsGST') {
+      setInvoice(prev => ({
+        ...prev,
+        IsGST: value,
+        IsIGST: value ? prev.IsIGST : false
+      }));
     } else if (section === 'placeOfSupply') {
       setInvoice(prev => ({ ...prev, placeOfSupply: value }));
     } else if (section === 'number') {
