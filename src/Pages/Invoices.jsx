@@ -5,6 +5,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db.js';
 import { deleteInvoice, saveInvoice } from '../services/invoiceService.js';
 import { getInvoiceTotal, calculateInvoiceTotals } from '../utils/invoiceCalculations.js';
+import {
+    ROUTES,
+    PAYMENT_STATUS,
+    DEFAULT_CURRENCY_CODE,
+    DEFAULT_LOCALE
+} from '../constants/index.js';
 
 export default function Invoices() {
     const navigate = useNavigate();
@@ -113,14 +119,14 @@ export default function Invoices() {
                         />
                     </div>
                     <button
-                        onClick={() => navigate('/create-json')}
+                        onClick={() => navigate(ROUTES.CREATE_INVOICE_JSON)}
                         className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors border border-slate-200"
                         title="Create an invoice by pasting or uploading JSON"
                     >
                         <FileCode2 size={16} className="text-blue-600" /> From JSON
                     </button>
                     <button
-                        onClick={() => navigate('/create')}
+                        onClick={() => navigate(ROUTES.CREATE_INVOICE)}
                         className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20"
                     >
                         <Plus size={18} /> New Invoice
@@ -159,7 +165,7 @@ export default function Invoices() {
                                         </span>
                                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${isPaid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
                                             }`}>
-                                            {isPaid ? 'Paid' : 'Unpaid'}
+                                            {isPaid ? PAYMENT_STATUS.PAID : PAYMENT_STATUS.UNPAID}
                                         </span>
                                     </div>
                                 </div>
@@ -168,7 +174,7 @@ export default function Invoices() {
                                     <div>
                                         <span className="text-xs text-slate-400 font-bold uppercase block">Total Amount</span>
                                         <span className="text-xl font-black text-slate-900">
-                                            {total.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
+                                            {total.toLocaleString(DEFAULT_LOCALE, { style: 'currency', currency: DEFAULT_CURRENCY_CODE })}
                                         </span>
                                     </div>
                                     <div className="flex gap-2">

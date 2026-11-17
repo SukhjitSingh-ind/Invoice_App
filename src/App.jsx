@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import MainLayout from './layouts/MainLayout';
 import { ToastProvider } from './components/Toast';
+import { ROUTES } from './constants/index.js';
 
 const LandingPage = lazy(() => import('./Pages/LandingPage'));
 const Dashboard = lazy(() => import('./Pages/Dashboard'));
@@ -31,25 +32,25 @@ export default function App() {
       <Router>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            <Route path="/" element={<LandingPage />} />
+            <Route path={ROUTES.HOME} element={<LandingPage />} />
 
             <Route element={<MainLayout />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/invoices" element={<Invoices />} />
-              <Route path="/clients" element={<Clients />} />
-              <Route path="/items" element={<Items />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/help" element={<Help />} />
-              <Route path="/create" element={<CreateInvoice />} />
-              <Route path="/create-json" element={<CreateInvoiceFromJson />} />
-              <Route path="/create-from-json" element={<CreateInvoiceFromJson />} />
-              <Route path="/editor/new" element={<InvoiceEditor />} />
-              <Route path="/edit/:id" element={<InvoiceEditor />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/your-details" element={<YourDetails />} />
+              <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
+              <Route path={ROUTES.INVOICES} element={<Invoices />} />
+              <Route path={ROUTES.CLIENTS} element={<Clients />} />
+              <Route path={ROUTES.ITEMS} element={<Items />} />
+              <Route path={ROUTES.REPORTS} element={<Reports />} />
+              <Route path={ROUTES.HELP} element={<Help />} />
+              <Route path={ROUTES.CREATE_INVOICE} element={<CreateInvoice />} />
+              <Route path={ROUTES.CREATE_INVOICE_JSON} element={<CreateInvoiceFromJson />} />
+              <Route path={ROUTES.CREATE_FROM_JSON} element={<CreateInvoiceFromJson />} />
+              <Route path={ROUTES.EDITOR_NEW} element={<InvoiceEditor />} />
+              <Route path={ROUTES.EDIT_INVOICE} element={<InvoiceEditor />} />
+              <Route path={ROUTES.SETTINGS} element={<Settings />} />
+              <Route path={ROUTES.YOUR_DETAILS} element={<YourDetails />} />
             </Route>
 
-            <Route path="/preview/:id" element={<InvoicePreview />} />
+            <Route path={ROUTES.PREVIEW_INVOICE} element={<InvoicePreview />} />
           </Routes>
         </Suspense>
       </Router>

@@ -1,6 +1,8 @@
+import { DEFAULT_TEMPLATE } from '../constants/index.js';
+
 export const TEMPLATES = [
     {
-        id: 'default',
+        id: DEFAULT_TEMPLATE,
         name: 'Professional Clean',
         description: 'A clean, modern professional invoice with serif fonts.',
         color: 'blue',

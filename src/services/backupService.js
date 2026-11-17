@@ -4,6 +4,7 @@ import { loadInvoicesFromDb } from './invoiceService.js';
 import { loadClientsFromDb } from './clientService.js';
 import { loadItemsFromDb } from './itemService.js';
 import { loadSettingsFromDb } from './settingsService.js';
+import { STORAGE_KEYS } from '../constants/index.js';
 
 /**
  * Export a single JSON file containing invoices, clients, items, companies and settings from Dexie.
@@ -15,10 +16,10 @@ export async function exportFullBackup() {
         const clients = await db.clients.toArray();
         const items = await db.items.toArray();
         const companies = await db.companies.toArray();
-        const configRecord = await db.settings.get('app_config');
+        const configRecord = await db.settings.get(STORAGE_KEYS.APP_CONFIG);
 
         const backup = {
-            type: 'invoice_app_full_backup',
+            type: STORAGE_KEYS.FULL_BACKUP_TYPE,
             version: 2,
             exportedAt: new Date().toISOString(),
             data: {
@@ -65,7 +66,7 @@ export async function importFullBackup(jsonData) {
             throw new Error('Invalid backup file: not a JSON object');
         }
 
-        if (parsed.type !== 'invoice_app_full_backup') {
+        if (parsed.type !== STORAGE_KEYS.FULL_BACKUP_TYPE) {
             throw new Error('Invalid backup type: this file is not a full app backup');
         }
 
@@ -115,7 +116,7 @@ export async function importFullBackup(jsonData) {
 
             if (settings && typeof settings === 'object') {
                 await db.settings.put({
-                    key: 'app_config',
+                    key: STORAGE_KEYS.APP_CONFIG,
                     value: {
                         validation: settings.validation,
                         display: settings.display,

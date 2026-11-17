@@ -1,5 +1,15 @@
 import { TEMPLATES } from './templates.js';
 import { generateUniqueInvoiceId } from './idGenerator.js';
+import {
+    DEFAULT_CURRENCY,
+    DEFAULT_GST_RATE,
+    DEFAULT_CGST_RATE,
+    DEFAULT_SGST_RATE,
+    DISCOUNT_TYPES,
+    DEFAULT_DISCOUNT_TYPE,
+    DEFAULT_DISCOUNT_VALUE,
+    DEFAULT_DISCOUNT_LABEL
+} from '../constants/index.js';
 
 /**
  * Validates whether a template ID exists in the application's supported templates.
@@ -246,7 +256,7 @@ export function parseAndValidateInvoiceJson(input) {
     }
 
     const placeOfSupply = safeString(raw.placeOfSupply);
-    const currency = safeString(raw.currency ?? '₹');
+    const currency = safeString(raw.currency ?? DEFAULT_CURRENCY);
 
     // 8. Notes & Terms
     let notes = safeString(raw.notes);
@@ -304,7 +314,7 @@ export function parseAndValidateInvoiceJson(input) {
         IsGST,
         IsIGST,
         placeOfSupply,
-        currency: currency || '₹',
+        currency: currency || DEFAULT_CURRENCY,
         notes,
         termsAndConditions,
         paymentInfo,
@@ -312,7 +322,7 @@ export function parseAndValidateInvoiceJson(input) {
         received,
         discountType,
         discountValue,
-        discountLabel: discountLabel || 'Discount',
+        discountLabel: discountLabel || DEFAULT_DISCOUNT_LABEL,
         customization
     };
 
@@ -487,20 +497,20 @@ export function resolveInvoiceData({
         recipient: resolvedRecipient,
         placeOfSupply: data.placeOfSupply || '',
         items,
-        currency: data.currency || '₹',
+        currency: data.currency || DEFAULT_CURRENCY,
         notes: data.notes || '',
         termsAndConditions: data.termsAndConditions || '',
         paymentInfo: data.paymentInfo || '',
         bankDetails: resolvedBankDetails,
         IsGST,
         IsIGST,
-        gstRate: 18,
-        cgst: 9,
-        sgst: 9,
+        gstRate: DEFAULT_GST_RATE,
+        cgst: DEFAULT_CGST_RATE,
+        sgst: DEFAULT_SGST_RATE,
         received: typeof data.received === 'number' ? data.received : 0,
-        discountType: data.discountType === 'percentage' ? 'percentage' : 'fixed',
-        discountValue: typeof data.discountValue === 'number' ? data.discountValue : 0,
-        discountLabel: data.discountLabel || 'Discount',
+        discountType: data.discountType === DISCOUNT_TYPES.PERCENTAGE ? DISCOUNT_TYPES.PERCENTAGE : DEFAULT_DISCOUNT_TYPE,
+        discountValue: typeof data.discountValue === 'number' ? data.discountValue : DEFAULT_DISCOUNT_VALUE,
+        discountLabel: data.discountLabel || DEFAULT_DISCOUNT_LABEL,
         template: resolvedTemplate,
         customization: data.customization || {
             backgroundColor: '',

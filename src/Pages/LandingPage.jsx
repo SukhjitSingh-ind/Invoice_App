@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ShieldCheck, Zap, BarChart3, Users, FileText, CheckCircle2, Package, Palette, HelpCircle } from 'lucide-react';
 import logoImg from '../assets/Logo_2_RB_HD.png';
+import { ROUTES } from '../constants/index.js';
 
 export default function LandingPage() {
     const navigate = useNavigate();
@@ -20,7 +21,7 @@ export default function LandingPage() {
                     </div>
                     <div className="flex items-center gap-4">
                         <button
-                            onClick={() => navigate('/dashboard')}
+                            onClick={() => navigate(ROUTES.DASHBOARD)}
                             className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20"
                         >
                             Get Started
@@ -47,13 +48,13 @@ export default function LandingPage() {
                     </p>
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                         <button
-                            onClick={() => navigate('/create')}
+                            onClick={() => navigate(ROUTES.CREATE_INVOICE)}
                             className="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold text-lg flex items-center gap-2 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/30 hover:-translate-y-1"
                         >
                             Create New Invoice <ChevronRight size={20} />
                         </button>
                         <button
-                            onClick={() => navigate('/dashboard')}
+                            onClick={() => navigate(ROUTES.DASHBOARD)}
                             className="px-8 py-4 bg-white text-slate-700 border border-slate-200 rounded-xl font-bold text-lg flex items-center gap-2 hover:bg-slate-50 transition-all hover:border-slate-300"
                         >
                             View Dashboard
@@ -163,7 +164,7 @@ export default function LandingPage() {
                             ))}
                         </ul>
                         <button
-                            onClick={() => navigate('/create')}
+                            onClick={() => navigate(ROUTES.CREATE_INVOICE)}
                             className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-500 transition-colors"
                         >
                             Try it now

@@ -5,6 +5,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db.js';
 import { calculateInvoiceTotals } from '../utils/invoiceCalculations.js';
 import { getActiveProfile } from '../services/settingsService.js';
+import {
+    ROUTES,
+    PAGINATION,
+    DEFAULT_CURRENCY_CODE,
+    DEFAULT_LOCALE
+} from '../constants/index.js';
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -43,7 +49,7 @@ export default function Dashboard() {
             .sort((a, b) => b.total - a.total);
 
         const totalOutstanding = clientDebtsArray.reduce((sum, c) => sum + c.total, 0);
-        const recentInvoices = invoices.slice(0, 5);
+        const recentInvoices = invoices.slice(0, PAGINATION.RECENT_INVOICES_LIMIT);
 
         return { totalAmount, clientDebtsArray, totalOutstanding, recentInvoices };
     }, [invoices]);
@@ -61,7 +67,7 @@ export default function Dashboard() {
                     </p>
                 </div>
                 <button
-                    onClick={() => navigate('/create')}
+                    onClick={() => navigate(ROUTES.CREATE_INVOICE)}
                     className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20"
                 >
                     <Plus size={18} /> New Invoice
@@ -78,7 +84,7 @@ export default function Dashboard() {
                         <span className="text-slate-500 font-bold text-sm">Total Revenue</span>
                     </div>
                     <h3 className="text-3xl font-black text-slate-800">
-                        {totalAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
+                        {totalAmount.toLocaleString(DEFAULT_LOCALE, { style: 'currency', currency: DEFAULT_CURRENCY_CODE })}
                     </h3>
                 </div>
                 <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
@@ -111,7 +117,7 @@ export default function Dashboard() {
                         <span className="text-slate-500 font-bold text-sm">Total Outstanding</span>
                     </div>
                     <h3 className="text-3xl font-black text-red-600">
-                        {totalOutstanding.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
+                        {totalOutstanding.toLocaleString(DEFAULT_LOCALE, { style: 'currency', currency: DEFAULT_CURRENCY_CODE })}
                     </h3>
                 </div>
             </div>
@@ -139,7 +145,7 @@ export default function Dashboard() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {clientDebtsArray.slice(0, 5).map((client, idx) => (
+                                {clientDebtsArray.slice(0, PAGINATION.RECENT_INVOICES_LIMIT).map((client, idx) => (
                                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
                                         <td className="p-4 font-bold text-slate-800">{client.clientName}</td>
                                         <td className="p-4 text-center">
@@ -154,10 +160,10 @@ export default function Dashboard() {
                                             )}
                                         </td>
                                         <td className="p-4 font-bold text-green-600 text-right">
-                                            {client.paid.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
+                                            {client.paid.toLocaleString(DEFAULT_LOCALE, { style: 'currency', currency: DEFAULT_CURRENCY_CODE })}
                                         </td>
                                         <td className={`p-4 font-black text-right text-lg ${client.total > 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                                            {client.total.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
+                                            {client.total.toLocaleString(DEFAULT_LOCALE, { style: 'currency', currency: DEFAULT_CURRENCY_CODE })}
                                         </td>
                                     </tr>
                                 ))}
@@ -173,7 +179,7 @@ export default function Dashboard() {
                     <h3 className="text-lg font-bold text-slate-700 flex items-center gap-2">
                         <FileText size={18} className="text-slate-500" /> Recent Invoices
                     </h3>
-                    <button onClick={() => navigate('/invoices')} className="text-blue-600 font-bold text-sm hover:underline flex items-center gap-1">
+                    <button onClick={() => navigate(ROUTES.INVOICES)} className="text-blue-600 font-bold text-sm hover:underline flex items-center gap-1">
                         View All <ArrowUpRight size={14} />
                     </button>
                 </div>
@@ -200,7 +206,7 @@ export default function Dashboard() {
                                         <td className="p-4 font-medium text-slate-600">{inv.recipient.name}</td>
                                         <td className="p-4 text-sm text-slate-500">{inv.date}</td>
                                         <td className="p-4 font-bold text-slate-800 text-right">
-                                            {calculateInvoiceTotals(inv).total.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
+                                            {calculateInvoiceTotals(inv).total.toLocaleString(DEFAULT_LOCALE, { style: 'currency', currency: DEFAULT_CURRENCY_CODE })}
                                         </td>
                                     </tr>
                                 ))}

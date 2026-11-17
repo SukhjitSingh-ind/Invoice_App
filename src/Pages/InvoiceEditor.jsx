@@ -9,6 +9,14 @@ import { getAllItems } from '../services/itemService.js';
 import { numberToWords } from '../utils/numberToWords';
 import { calculateInvoiceTotals } from '../utils/invoiceCalculations';
 import { validateGST } from '../utils/validation';
+import {
+  ROUTES,
+  STORAGE_KEYS,
+  DEFAULT_GST_RATE,
+  DEFAULT_ITEM_UNIT,
+  MAX_IMAGE_SIZE_BYTES,
+  DEFAULT_LOCALE
+} from '../constants/index.js';
 
 
 // Images
@@ -54,7 +62,7 @@ export default function InvoiceEditor() {
               setCustomization(existing.customization);
             }
           } else {
-            navigate('/');
+            navigate(ROUTES.HOME);
           }
         }
         return;
@@ -64,17 +72,17 @@ export default function InvoiceEditor() {
       let imported = location.state?.importedInvoice;
       if (!imported) {
         try {
-          const stored = sessionStorage.getItem('pending_imported_invoice');
+          const stored = sessionStorage.getItem(STORAGE_KEYS.PENDING_IMPORTED_INVOICE);
           if (stored) {
             imported = JSON.parse(stored);
-            sessionStorage.removeItem('pending_imported_invoice');
+            sessionStorage.removeItem(STORAGE_KEYS.PENDING_IMPORTED_INVOICE);
           }
         } catch (e) {
           console.error('Failed to parse pending imported invoice:', e);
         }
       } else {
         try {
-          sessionStorage.removeItem('pending_imported_invoice');
+          sessionStorage.removeItem(STORAGE_KEYS.PENDING_IMPORTED_INVOICE);
         } catch (e) {
           console.warn('Could not clear pending_imported_invoice:', e);
         }
@@ -270,7 +278,7 @@ export default function InvoiceEditor() {
     const newId = Math.max(...invoice.items.map(i => i.id), 0) + 1;
     setInvoice(prev => ({
       ...prev,
-      items: [...prev.items, { id: newId, description: '', quantity: 1, price: 0, hsnSac: '', unit: 'Pcs', gstRate: 18 }]
+      items: [...prev.items, { id: newId, description: '', quantity: 1, price: 0, hsnSac: '', unit: DEFAULT_ITEM_UNIT, gstRate: DEFAULT_GST_RATE }]
     }));
   };
 
@@ -292,8 +300,8 @@ export default function InvoiceEditor() {
         quantity: 1,
         price: libraryItem.defaultPrice,
         hsnSac: libraryItem.hsnSac || '',
-        unit: libraryItem.unit || 'Pcs',
-        gstRate: libraryItem.gstRate || 18
+        unit: libraryItem.unit || DEFAULT_ITEM_UNIT,
+        gstRate: libraryItem.gstRate || DEFAULT_GST_RATE
       }]
     }));
 
@@ -312,7 +320,7 @@ export default function InvoiceEditor() {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 500000) { // 500KB limit
+      if (file.size > MAX_IMAGE_SIZE_BYTES) { // 500KB limit
         addToast('Image size should be less than 500KB', 'error');
         return;
       }
@@ -412,7 +420,7 @@ export default function InvoiceEditor() {
       {/* Breadcrumbs & Actions */}
       <div className="max-w-4xl mx-auto pt-8 px-4 flex justify-between items-end">
         <div className="flex items-center gap-2 text-sm text-slate-500">
-          <button onClick={() => navigate('/dashboard')} className="hover:text-blue-600 font-medium transition-colors">Dashboard</button>
+          <button onClick={() => navigate(ROUTES.DASHBOARD)} className="hover:text-blue-600 font-medium transition-colors">Dashboard</button>
           <ChevronRight size={14} />
           <span className="font-bold text-slate-800">Edit Invoice {invoice.number}</span>
         </div>
@@ -535,7 +543,7 @@ export default function InvoiceEditor() {
                   <option value="">Select an item from library...</option>
                   {libraryItems.map(item => (
                     <option key={item.id} value={item.id}>
-                      {item.name} - ₹{item.defaultPrice.toLocaleString('en-IN')}
+                      {item.name} - ₹{item.defaultPrice.toLocaleString(DEFAULT_LOCALE)}
                     </option>
                   ))}
                 </select>

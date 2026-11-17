@@ -1,4 +1,5 @@
 import { db } from '../db/db.js';
+import { DEFAULT_ITEM_UNIT, DEFAULT_GST_RATE } from '../constants/index.js';
 
 let cachedItems = [];
 
@@ -150,8 +151,8 @@ export const createEmptyItem = () => {
         description: '',
         defaultPrice: 0,
         hsnSac: '',
-        unit: 'Pcs',
-        gstRate: 18,
+        unit: DEFAULT_ITEM_UNIT,
+        gstRate: DEFAULT_GST_RATE,
         priceHistory: []
     };
 };

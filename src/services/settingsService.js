@@ -1,5 +1,6 @@
 import { db } from '../db/db.js';
 import { DEFAULT_INITIAL_SETTINGS } from './migrationService.js';
+import { STORAGE_KEYS } from '../constants/index.js';
 
 let cachedSettings = null;
 
@@ -10,7 +11,7 @@ let cachedSettings = null;
  */
 export const loadSettingsFromDb = async () => {
     try {
-        const configRecord = await db.settings.get('app_config');
+        const configRecord = await db.settings.get(STORAGE_KEYS.APP_CONFIG);
         const companies = await db.companies.toArray();
 
         const config = configRecord?.value || DEFAULT_INITIAL_SETTINGS;
@@ -68,7 +69,7 @@ export const updateSettings = async (newSettings) => {
 
         await db.transaction('rw', [db.settings, db.companies], async () => {
             await db.settings.put({
-                key: 'app_config',
+                key: STORAGE_KEYS.APP_CONFIG,
                 value: {
                     validation: merged.validation,
                     display: merged.display,
@@ -100,7 +101,7 @@ export const resetSettings = async () => {
     try {
         await db.transaction('rw', [db.settings, db.companies], async () => {
             await db.settings.put({
-                key: 'app_config',
+                key: STORAGE_KEYS.APP_CONFIG,
                 value: {
                     validation: DEFAULT_INITIAL_SETTINGS.validation,
                     display: DEFAULT_INITIAL_SETTINGS.display,
@@ -166,7 +167,7 @@ export const deleteCompanyProfile = async (id) => {
     await db.transaction('rw', [db.companies, db.settings], async () => {
         await db.companies.delete(id);
         const remaining = await db.companies.toArray();
-        const configRecord = await db.settings.get('app_config');
+        const configRecord = await db.settings.get(STORAGE_KEYS.APP_CONFIG);
         if (configRecord && configRecord.value.activeProfileId === id) {
             configRecord.value.activeProfileId = remaining[0]?.id || 'default';
             await db.settings.put(configRecord);
@@ -178,7 +179,7 @@ export const deleteCompanyProfile = async (id) => {
 };
 
 export const setActiveProfile = async (id) => {
-    const configRecord = await db.settings.get('app_config');
+    const configRecord = await db.settings.get(STORAGE_KEYS.APP_CONFIG);
     if (configRecord) {
         configRecord.value.activeProfileId = id;
         await db.settings.put(configRecord);
