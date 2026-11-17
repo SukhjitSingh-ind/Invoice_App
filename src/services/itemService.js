@@ -1,5 +1,10 @@
 import { db } from '../db/db.js';
-import { DEFAULT_ITEM_UNIT, DEFAULT_GST_RATE } from '../constants/index.js';
+import {
+    DEFAULT_ITEM_UNIT,
+    DEFAULT_GST_RATE,
+    MIME_TYPES,
+    DEXIE_TRANSACTION_MODE
+} from '../constants/index.js';
 
 let cachedItems = [];
 
@@ -165,7 +170,7 @@ export const exportItemsToJSON = async () => {
     try {
         const items = await db.items.toArray();
         const jsonString = JSON.stringify(items, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
+        const blob = new Blob([jsonString], { type: MIME_TYPES.JSON });
         const url = URL.createObjectURL(blob);
 
         const link = document.createElement('a');
@@ -207,7 +212,7 @@ export const importItemsFromJSON = async (jsonData) => {
         }
 
         let importedCount = 0;
-        await db.transaction('rw', db.items, async () => {
+        await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, db.items, async () => {
             const existingItems = await db.items.toArray();
 
             for (const importedItem of importedItems) {

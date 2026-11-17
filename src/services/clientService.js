@@ -1,4 +1,5 @@
 import { db } from '../db/db.js';
+import { MIME_TYPES } from '../constants/index.js';
 
 let cachedClients = [];
 
@@ -166,7 +167,7 @@ export const exportClientsToJSON = async () => {
     try {
         const clients = await db.clients.toArray();
         const jsonString = JSON.stringify(clients, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
+        const blob = new Blob([jsonString], { type: MIME_TYPES.JSON });
         const url = URL.createObjectURL(blob);
 
         const link = document.createElement('a');

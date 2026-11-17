@@ -4,7 +4,7 @@ import { Search, Printer, Trash2, Plus, FileText, CheckCircle, XCircle, FileCode
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db.js';
 import { deleteInvoice, saveInvoice } from '../services/invoiceService.js';
-import { getInvoiceTotal, calculateInvoiceTotals } from '../utils/invoiceCalculations.js';
+import { getInvoiceTotal, calculateInvoiceTotals, isInvoicePaid } from '../utils/invoiceCalculations.js';
 import {
     ROUTES,
     PAYMENT_STATUS,
@@ -39,8 +39,7 @@ export default function Invoices() {
 
         const { total } = calculateInvoiceTotals(inv);
 
-        // Check if currently paid (received >= total)
-        const isPaid = (inv.received || 0) >= total;
+        const isPaid = isInvoicePaid(inv);
 
         const updatedInvoice = {
             ...inv,
@@ -146,7 +145,7 @@ export default function Invoices() {
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredInvoices.map((inv) => {
                         const total = getInvoiceTotal(inv);
-                        const isPaid = (inv.received || 0) >= total;
+                        const isPaid = isInvoicePaid(inv);
 
                         return (
                             <div

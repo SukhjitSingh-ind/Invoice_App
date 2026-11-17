@@ -1,6 +1,10 @@
 import { db } from '../db/db.js';
 import { DEFAULT_INITIAL_SETTINGS } from './migrationService.js';
-import { STORAGE_KEYS } from '../constants/index.js';
+import {
+    STORAGE_KEYS,
+    DEFAULT_PROFILE_ID,
+    DEXIE_TRANSACTION_MODE
+} from '../constants/index.js';
 
 let cachedSettings = null;
 
@@ -16,7 +20,7 @@ export const loadSettingsFromDb = async () => {
 
         const config = configRecord?.value || DEFAULT_INITIAL_SETTINGS;
         const profileList = companies.length > 0 ? companies : DEFAULT_INITIAL_SETTINGS.companyProfiles;
-        const activeId = config.activeProfileId || profileList[0]?.id || 'default';
+        const activeId = config.activeProfileId || profileList[0]?.id || DEFAULT_PROFILE_ID;
 
         cachedSettings = {
             validation: { ...DEFAULT_INITIAL_SETTINGS.validation, ...(config.validation || {}) },
@@ -67,7 +71,7 @@ export const updateSettings = async (newSettings) => {
             activeProfileId: newSettings.activeProfileId || current.activeProfileId
         };
 
-        await db.transaction('rw', [db.settings, db.companies], async () => {
+        await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, [db.settings, db.companies], async () => {
             await db.settings.put({
                 key: STORAGE_KEYS.APP_CONFIG,
                 value: {
@@ -99,7 +103,7 @@ export const updateSettings = async (newSettings) => {
  */
 export const resetSettings = async () => {
     try {
-        await db.transaction('rw', [db.settings, db.companies], async () => {
+        await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, [db.settings, db.companies], async () => {
             await db.settings.put({
                 key: STORAGE_KEYS.APP_CONFIG,
                 value: {
@@ -164,12 +168,12 @@ export const deleteCompanyProfile = async (id) => {
     const companies = await db.companies.toArray();
     if (companies.length <= 1) return false;
 
-    await db.transaction('rw', [db.companies, db.settings], async () => {
+    await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, [db.companies, db.settings], async () => {
         await db.companies.delete(id);
         const remaining = await db.companies.toArray();
         const configRecord = await db.settings.get(STORAGE_KEYS.APP_CONFIG);
         if (configRecord && configRecord.value.activeProfileId === id) {
-            configRecord.value.activeProfileId = remaining[0]?.id || 'default';
+            configRecord.value.activeProfileId = remaining[0]?.id || DEFAULT_PROFILE_ID;
             await db.settings.put(configRecord);
         }
     });

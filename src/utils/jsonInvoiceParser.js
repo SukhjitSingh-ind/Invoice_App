@@ -8,7 +8,11 @@ import {
     DISCOUNT_TYPES,
     DEFAULT_DISCOUNT_TYPE,
     DEFAULT_DISCOUNT_VALUE,
-    DEFAULT_DISCOUNT_LABEL
+    DEFAULT_DISCOUNT_LABEL,
+    DEFAULT_ITEM_UNIT,
+    DEFAULT_STATE,
+    DEFAULT_INITIAL_INVOICE_NUMBER,
+    APP_DEFAULTS
 } from '../constants/index.js';
 
 /**
@@ -225,9 +229,9 @@ export function parseAndValidateInvoiceJson(input) {
                 const quantity = safeNumber(rawItem.quantity, 1);
                 const price = safeNumber(rawItem.price, 0);
                 const hsnSac = safeString(rawItem.hsnSac);
-                const unit = safeString(rawItem.unit ?? 'Pcs');
+                const unit = safeString(rawItem.unit ?? DEFAULT_ITEM_UNIT);
                 const rawGstRate = rawItem.gstRate;
-                const gstRate = rawGstRate !== undefined ? safeNumber(rawGstRate, 18) : 18;
+                const gstRate = rawGstRate !== undefined ? safeNumber(rawGstRate, DEFAULT_GST_RATE) : DEFAULT_GST_RATE;
                 const itemId = typeof rawItem.id === 'number' && Number.isInteger(rawItem.id) ? rawItem.id : idx + 1;
 
                 items.push({
@@ -236,7 +240,7 @@ export function parseAndValidateInvoiceJson(input) {
                     quantity: quantity < 0 ? 0 : quantity,
                     price: price < 0 ? 0 : price,
                     hsnSac,
-                    unit: unit || 'Pcs',
+                    unit: unit || DEFAULT_ITEM_UNIT,
                     gstRate: gstRate < 0 ? 0 : gstRate
                 });
             });
@@ -246,13 +250,13 @@ export function parseAndValidateInvoiceJson(input) {
     // 7. Strict GST & IGST Resolution
     // Default IsGST to false
     const parsedIsGST = parseBoolean(raw.IsGST);
-    const IsGST = parsedIsGST !== undefined ? parsedIsGST : false;
+    const IsGST = parsedIsGST !== undefined ? parsedIsGST : APP_DEFAULTS.DEFAULT_IS_GST;
 
     // Rule: IsIGST is meaningful ONLY when IsGST is true; otherwise always false
-    let IsIGST = false;
+    let IsIGST = APP_DEFAULTS.DEFAULT_IS_IGST;
     if (IsGST) {
         const parsedIsIGST = parseBoolean(raw.IsIGST);
-        IsIGST = parsedIsIGST !== undefined ? parsedIsIGST : false;
+        IsIGST = parsedIsIGST !== undefined ? parsedIsIGST : APP_DEFAULTS.DEFAULT_IS_IGST;
     }
 
     const placeOfSupply = safeString(raw.placeOfSupply);
@@ -283,15 +287,15 @@ export function parseAndValidateInvoiceJson(input) {
     const received = safeNumber(raw.received, 0);
 
     // 11. Discount
-    let discountType = 'fixed';
-    let discountValue = 0;
-    let discountLabel = 'Discount';
+    let discountType = DEFAULT_DISCOUNT_TYPE;
+    let discountValue = DEFAULT_DISCOUNT_VALUE;
+    let discountLabel = DEFAULT_DISCOUNT_LABEL;
 
-    if (raw.discountType === 'percentage' || raw.discountType === 'fixed') {
+    if (raw.discountType === DISCOUNT_TYPES.PERCENTAGE || raw.discountType === DISCOUNT_TYPES.FIXED) {
         discountType = raw.discountType;
     }
-    discountValue = safeNumber(raw.discountValue, 0);
-    discountLabel = safeString(raw.discountLabel ?? 'Discount');
+    discountValue = safeNumber(raw.discountValue, DEFAULT_DISCOUNT_VALUE);
+    discountLabel = safeString(raw.discountLabel ?? DEFAULT_DISCOUNT_LABEL);
 
     // 12. Customization
     let customization = undefined;
@@ -431,7 +435,7 @@ export function resolveInvoiceData({
         phone: data.sender?.phone || senderProfile?.phone || '',
         email: data.sender?.email || senderProfile?.email || '',
         gstNumber: data.sender?.gstNumber || senderProfile?.gstNumber || '',
-        state: data.sender?.state || senderProfile?.state || '24-Gujarat'
+        state: data.sender?.state || senderProfile?.state || DEFAULT_STATE
     };
 
     // --- BANK DETAILS ---
@@ -459,7 +463,7 @@ export function resolveInvoiceData({
     };
 
     // --- INVOICE NUMBER & DATE ---
-    const number = data.invoiceNumber ? String(data.invoiceNumber) : nextInvoiceNumberFallback || '1';
+    const number = data.invoiceNumber ? String(data.invoiceNumber) : nextInvoiceNumberFallback || DEFAULT_INITIAL_INVOICE_NUMBER;
     const date = data.issueDate ? String(data.issueDate) : new Date().toISOString().split('T')[0];
 
     // --- ITEMS ---
@@ -470,13 +474,13 @@ export function resolveInvoiceData({
             quantity: typeof it.quantity === 'number' ? it.quantity : 1,
             price: typeof it.price === 'number' ? it.price : 0,
             hsnSac: it.hsnSac || '',
-            unit: it.unit || 'Pcs',
-            gstRate: typeof it.gstRate === 'number' ? it.gstRate : 18
+            unit: it.unit || DEFAULT_ITEM_UNIT,
+            gstRate: typeof it.gstRate === 'number' ? it.gstRate : DEFAULT_GST_RATE
         }))
         : [];
 
     // --- GST LOGIC ---
-    let IsGST = false;
+    let IsGST = APP_DEFAULTS.DEFAULT_IS_GST;
     if (typeof manualIsGST === 'boolean') {
         IsGST = manualIsGST;
     } else if (typeof data.IsGST === 'boolean') {
@@ -484,7 +488,7 @@ export function resolveInvoiceData({
     }
 
     // --- IGST LOGIC ---
-    let IsIGST = false;
+    let IsIGST = APP_DEFAULTS.DEFAULT_IS_IGST;
     if (IsGST && typeof data.IsIGST === 'boolean') {
         IsIGST = data.IsIGST;
     }

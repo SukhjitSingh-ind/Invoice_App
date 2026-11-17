@@ -4,7 +4,11 @@ import {
     STORAGE_KEYS,
     DEFAULT_CURRENCY,
     DEFAULT_TEMPLATE,
-    APP_DEFAULTS
+    APP_DEFAULTS,
+    DEFAULT_PROFILE_ID,
+    DEFAULT_STATE,
+    DEXIE_TRANSACTION_MODE,
+    CURRENT_SCHEMA_VERSION
 } from '../constants/index.js';
 
 export const MIGRATION_MARKER = STORAGE_KEYS.MIGRATION_MARKER;
@@ -65,10 +69,10 @@ export const DEFAULT_INITIAL_SETTINGS = {
     },
     companyProfiles: [
         {
-            id: 'default',
+            id: DEFAULT_PROFILE_ID,
             name: 'GK AUTO ELECTRIC WORKS',
             address: 'ISHWAR ARCADE shop no 11 asalali Cross\nroad nearby Kheda road Ahmedabad Gujarat.',
-            state: '24-Gujarat',
+            state: DEFAULT_STATE,
             phone: '8141378031',
             email: 'asr989898@gmail.com',
             gstNumber: '24DTJPS4161K1Z9',
@@ -82,7 +86,7 @@ export const DEFAULT_INITIAL_SETTINGS = {
             isDefault: true
         }
     ],
-    activeProfileId: 'default'
+    activeProfileId: DEFAULT_PROFILE_ID
 };
 
 /**
@@ -214,7 +218,7 @@ export async function initializeDatabaseAndMigrate() {
         const settingsSource = rawSettings && typeof rawSettings === 'object' ? rawSettings : DEFAULT_INITIAL_SETTINGS;
         const companiesToInsert = (settingsSource.companyProfiles || DEFAULT_INITIAL_SETTINGS.companyProfiles).map(p => ({
             ...p,
-            isDefault: p.id === (settingsSource.activeProfileId || 'default')
+            isDefault: p.id === (settingsSource.activeProfileId || DEFAULT_PROFILE_ID)
         }));
 
         const appSettingsRecord = {
@@ -223,12 +227,12 @@ export async function initializeDatabaseAndMigrate() {
                 validation: { ...DEFAULT_INITIAL_SETTINGS.validation, ...settingsSource.validation },
                 display: { ...DEFAULT_INITIAL_SETTINGS.display, ...settingsSource.display },
                 payment: { ...DEFAULT_INITIAL_SETTINGS.payment, ...settingsSource.payment },
-                activeProfileId: settingsSource.activeProfileId || 'default'
+                activeProfileId: settingsSource.activeProfileId || DEFAULT_PROFILE_ID
             }
         };
 
         // 6. Execute Atomic Transaction in Dexie
-        await db.transaction('rw', [db.invoices, db.clients, db.items, db.companies, db.settings], async () => {
+        await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, [db.invoices, db.clients, db.items, db.companies, db.settings], async () => {
             if (invoicesToInsert.length > 0) {
                 await db.invoices.bulkPut(invoicesToInsert);
             }
@@ -257,7 +261,7 @@ export async function initializeDatabaseAndMigrate() {
                 localStorage.setItem(STORAGE_KEYS.BACKUP_PRE_DEXIE, rawInvoicesStr);
             }
             localStorage.setItem(MIGRATION_MARKER, 'true');
-            localStorage.setItem(STORAGE_KEYS.SCHEMA_VERSION, '2');
+            localStorage.setItem(STORAGE_KEYS.SCHEMA_VERSION, CURRENT_SCHEMA_VERSION);
             localStorage.removeItem(MIGRATION_LOCK);
         }
 
@@ -280,7 +284,7 @@ export async function initializeDatabaseAndMigrate() {
  * Seeds initial data for brand-new users with zero prior storage
  */
 async function seedInitialData() {
-    await db.transaction('rw', [db.invoices, db.companies, db.settings], async () => {
+    await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, [db.invoices, db.companies, db.settings], async () => {
         await db.invoices.bulkPut(DEFAULT_INITIAL_INVOICES.map(inv => transformInvoiceForDexie(inv)));
         await db.companies.bulkPut(DEFAULT_INITIAL_SETTINGS.companyProfiles.map(p => ({ ...p, isDefault: true })));
         await db.settings.put({

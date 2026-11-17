@@ -10,7 +10,11 @@ import {
     DEFAULT_DISCOUNT_TYPE,
     DEFAULT_DISCOUNT_VALUE,
     DEFAULT_DISCOUNT_LABEL,
-    APP_DEFAULTS
+    APP_DEFAULTS,
+    DEFAULT_STATE,
+    DEFAULT_INITIAL_INVOICE_NUMBER,
+    MIME_TYPES,
+    DEXIE_TRANSACTION_MODE
 } from '../constants/index.js';
 
 export const migrateInvoiceRecord = (inv) => {
@@ -82,7 +86,7 @@ export const saveInvoice = async (invoice) => {
     try {
         const toSave = transformInvoiceForDexie(invoice);
 
-        await db.transaction('rw', [db.invoices, db.clients], async () => {
+        await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, [db.invoices, db.clients], async () => {
             if (toSave.recipient && toSave.recipient.name) {
                 await upsertClient(toSave.recipient);
             }
@@ -148,7 +152,7 @@ export const createEmptyInvoice = (overrideProfile = null) => {
             phone: sender.phone || '',
             email: sender.email || '',
             gstNumber: sender.gstNumber || '',
-            state: sender.state || '24-Gujarat'
+            state: sender.state || DEFAULT_STATE
         },
         recipient: {
             name: '',
@@ -192,7 +196,7 @@ export const createEmptyInvoice = (overrideProfile = null) => {
  */
 export const getNextInvoiceNumber = async () => {
     const invoices = await db.invoices.toArray();
-    if (invoices.length === 0) return '1';
+    if (invoices.length === 0) return DEFAULT_INITIAL_INVOICE_NUMBER;
 
     const sorted = [...invoices].sort((a, b) => {
         if (typeof a.id === 'number' && typeof b.id === 'number') {
@@ -251,7 +255,7 @@ export const exportInvoices = async () => {
     try {
         const invoices = await db.invoices.toArray();
         const dataStr = JSON.stringify(invoices, null, 2);
-        const blob = new Blob([dataStr], { type: 'application/json' });
+        const blob = new Blob([dataStr], { type: MIME_TYPES.JSON });
         const url = URL.createObjectURL(blob);
 
         const link = document.createElement('a');
@@ -285,7 +289,7 @@ export const importInvoices = async (jsonData) => {
         let addedCount = 0;
         let updatedCount = 0;
 
-        await db.transaction('rw', db.invoices, async () => {
+        await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, db.invoices, async () => {
             for (const rawInv of newInvoices) {
                 if (!rawInv || typeof rawInv !== 'object' || !rawInv.number) continue;
 

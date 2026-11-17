@@ -1,5 +1,12 @@
 // Shared invoice calculation helpers to keep subtotal/tax/discount logic consistent
-import { DEFAULT_GST_RATE, DISCOUNT_TYPES } from '../constants/index.js';
+import {
+  DEFAULT_GST_RATE,
+  DISCOUNT_TYPES,
+  PERCENTAGE_FACTOR,
+  TAX_SPLIT_DIVISOR,
+  INVOICE_STATUS,
+  PAYMENT_STATUS
+} from '../constants/index.js';
 
 /**
  * Safely parses a numeric value, returning 0 for NaN/undefined/null.
@@ -43,20 +50,20 @@ export function calculateInvoiceTotals(invoice) {
         const itemTotal = quantity * price;
         const rawRate = item.gstRate !== undefined ? item.gstRate : DEFAULT_GST_RATE;
         const rate = toNumber(rawRate);
-        return sum + (itemTotal * rate) / 100;
+        return sum + (itemTotal * rate) / PERCENTAGE_FACTOR;
       }, 0)
     : 0;
 
   const igstAmount = invoice.IsGST && invoice.IsIGST ? taxAmount : 0;
-  const cgstAmount = invoice.IsGST && !invoice.IsIGST ? taxAmount / 2 : 0;
-  const sgstAmount = invoice.IsGST && !invoice.IsIGST ? taxAmount / 2 : 0;
+  const cgstAmount = invoice.IsGST && !invoice.IsIGST ? taxAmount / TAX_SPLIT_DIVISOR : 0;
+  const sgstAmount = invoice.IsGST && !invoice.IsIGST ? taxAmount / TAX_SPLIT_DIVISOR : 0;
 
   const preDiscountTotal = subtotal + taxAmount;
 
   const discountValue = toNumber(invoice.discountValue || 0);
   const discountAmount =
     invoice.discountType === DISCOUNT_TYPES.PERCENTAGE
-      ? (preDiscountTotal * discountValue) / 100
+      ? (preDiscountTotal * discountValue) / PERCENTAGE_FACTOR
       : discountValue;
 
   const rawTotal = preDiscountTotal - discountAmount;
@@ -84,4 +91,27 @@ export function calculateInvoiceTotals(invoice) {
 export function getInvoiceTotal(invoice) {
   return calculateInvoiceTotals(invoice).total;
 }
+
+/**
+ * Determines whether an invoice is fully paid.
+ * Evaluates explicit status or received amount vs calculated total.
+ * @param {object} invoice
+ * @returns {boolean}
+ */
+export function isInvoicePaid(invoice) {
+  if (!invoice) return false;
+  if (invoice.status === INVOICE_STATUS.PAID) return true;
+  const { total } = calculateInvoiceTotals(invoice);
+  return (toNumber(invoice.received) || 0) >= total;
+}
+
+/**
+ * Derives the invoice payment status string ('Paid' or 'Unpaid').
+ * @param {object} invoice
+ * @returns {string}
+ */
+export function getPaymentStatus(invoice) {
+  return isInvoicePaid(invoice) ? PAYMENT_STATUS.PAID : PAYMENT_STATUS.UNPAID;
+}
+
 
