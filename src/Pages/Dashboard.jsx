@@ -1,14 +1,17 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, FileText, ArrowUpRight, DollarSign, Users } from 'lucide-react';
-import { getAllInvoices } from '../services/invoiceService';
-import { calculateInvoiceTotals } from '../utils/invoiceCalculations';
-import { getActiveProfile } from '../services/settingsService';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db.js';
+import { calculateInvoiceTotals } from '../utils/invoiceCalculations.js';
+import { getActiveProfile } from '../services/settingsService.js';
 
 export default function Dashboard() {
     const navigate = useNavigate();
-    const [invoices] = useState(() => getAllInvoices());
-    const [activeProfile] = useState(() => getActiveProfile());
+    const liveInvoices = useLiveQuery(() => db.invoices.toArray(), []);
+    const liveCompany = useLiveQuery(() => db.companies.filter(c => c.isDefault).first(), []);
+    const invoices = useMemo(() => liveInvoices || [], [liveInvoices]);
+    const activeProfile = liveCompany || getActiveProfile();
 
     const { totalAmount, clientDebtsArray, totalOutstanding, recentInvoices } = useMemo(() => {
         const totalAmount = invoices.reduce((sum, inv) => {

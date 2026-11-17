@@ -1,20 +1,18 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Printer, Trash2, Plus, FileText, CheckCircle, XCircle, FileCode2 } from 'lucide-react';
-import { getAllInvoices, deleteInvoice, saveInvoice } from '../services/invoiceService';
-import { getInvoiceTotal, calculateInvoiceTotals } from '../utils/invoiceCalculations';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db.js';
+import { deleteInvoice, saveInvoice } from '../services/invoiceService.js';
+import { getInvoiceTotal, calculateInvoiceTotals } from '../utils/invoiceCalculations.js';
 
 export default function Invoices() {
     const navigate = useNavigate();
-    const [invoices, setInvoices] = useState(() => getAllInvoices());
+    const liveInvoices = useLiveQuery(() => db.invoices.toArray(), []);
     const [searchTerm, setSearchTerm] = useState('');
     const [minPrice, setMinPrice] = useState('');
     const [maxPrice, setMaxPrice] = useState('');
     const [deleteConfirm, setDeleteConfirm] = useState(null);
-
-    const loadInvoices = useCallback(() => {
-        setInvoices(getAllInvoices());
-    }, []);
 
     const handleDelete = (id, e) => {
         e.stopPropagation();
@@ -22,15 +20,14 @@ export default function Invoices() {
         setDeleteConfirm(id);
     };
 
-    const confirmDelete = () => {
+    const confirmDelete = async () => {
         if (deleteConfirm) {
-            deleteInvoice(deleteConfirm);
-            loadInvoices();
+            await deleteInvoice(deleteConfirm);
             setDeleteConfirm(null);
         }
     };
 
-    const togglePaymentStatus = (inv, e) => {
+    const togglePaymentStatus = async (inv, e) => {
         e.stopPropagation();
         e.preventDefault();
 
@@ -44,11 +41,11 @@ export default function Invoices() {
             received: isPaid ? 0 : total
         };
 
-        saveInvoice(updatedInvoice);
-        loadInvoices();
+        await saveInvoice(updatedInvoice);
     };
 
     const filteredInvoices = useMemo(() => {
+        const invoices = liveInvoices || [];
         const term = searchTerm.toLowerCase().trim();
         const min = parseFloat(minPrice);
         const max = parseFloat(maxPrice);
@@ -66,7 +63,7 @@ export default function Invoices() {
 
             return matchesTerm && matchesMin && matchesMax;
         });
-    }, [invoices, searchTerm, minPrice, maxPrice]);
+    }, [liveInvoices, searchTerm, minPrice, maxPrice]);
 
     return (
         <div className="p-8">

@@ -1,4 +1,4 @@
-import { getAllInvoices } from './invoiceService';
+import { getAllInvoices } from './invoiceService.js';
 
 /**
  * Normalize item name for comparison

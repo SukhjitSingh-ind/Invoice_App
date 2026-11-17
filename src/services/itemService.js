@@ -1,52 +1,62 @@
-const STORAGE_KEY = 'invoice_app_items';
+import { db } from '../db/db.js';
+
+let cachedItems = [];
 
 /**
- * Get all items from localStorage
- * @returns {Array} Array of item objects
+ * Hydrates items cache from Dexie.
+ * @returns {Promise<Array>}
  */
-export const getAllItems = () => {
+export const loadItemsFromDb = async () => {
     try {
-        const data = localStorage.getItem(STORAGE_KEY);
-        if (!data) {
-            return [];
-        }
-        return JSON.parse(data);
+        const items = await db.items.toArray();
+        cachedItems = items;
+        return items;
     } catch (error) {
-        console.error('Error loading items:', error);
-        return [];
+        console.error('Error loading items from Dexie:', error);
+        return cachedItems;
     }
 };
 
 /**
- * Save all items to localStorage
- * @param {Array} items - Array of item objects
+ * Get all items (sync from cache, fallback empty)
+ * @returns {Array} Array of item objects
  */
-const saveItems = (items) => {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch (error) {
-        console.error('Error saving items:', error);
-    }
+export const getAllItems = () => {
+    return cachedItems;
+};
+
+/**
+ * Get all items asynchronously directly from Dexie
+ * @returns {Promise<Array>}
+ */
+export const getAllItemsAsync = async () => {
+    return await loadItemsFromDb();
 };
 
 /**
  * Get single item by ID
  * @param {number|string} id - Item ID
- * @returns {Object|null} Item object or null if not found
+ * @returns {Promise<Object|null>} Item object or null if not found
  */
-export const getItem = (id) => {
-    const items = getAllItems();
-    const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-    return items.find(item => item.id === numId) || null;
+export const getItem = async (id) => {
+    if (id === null || id === undefined) return null;
+    let item = await db.items.get(id);
+    if (!item && typeof id === 'string') {
+        const numId = Number(id);
+        if (!isNaN(numId)) item = await db.items.get(numId);
+    }
+    if (!item) {
+        item = await db.items.filter(i => String(i.id) === String(id)).first();
+    }
+    return item || null;
 };
 
 /**
  * Create a new item
- * @param {Object} itemData - Item data for the new item
- * @returns {Object} The newly created item object
+ * @param {Object} itemData
+ * @returns {Promise<Object>}
  */
-export const createItem = (itemData) => {
-    const items = getAllItems();
+export const createItem = async (itemData) => {
     const newItem = {
         id: Date.now(),
         ...itemData,
@@ -55,81 +65,74 @@ export const createItem = (itemData) => {
         ],
         createdAt: new Date().toISOString()
     };
-    items.push(newItem);
-    saveItems(items);
+    await db.items.put(newItem);
+    await loadItemsFromDb();
     return newItem;
 };
 
 /**
  * Update an existing item by ID
- * @param {number|string} id - The ID of the item to update
- * @param {Object} itemData - The data to update the item with
- * @returns {Object|null} The updated item object, or null if not found
+ * @param {number|string} id
+ * @param {Object} itemData
+ * @returns {Promise<Object|null>}
  */
-export const updateItem = (id, itemData) => {
-    const items = getAllItems();
-    const index = items.findIndex(i => i.id === id);
-    if (index !== -1) {
-        const currentItem = items[index];
-        const newPrice = itemData.defaultPrice;
-        let priceHistory = currentItem.priceHistory || [];
+export const updateItem = async (id, itemData) => {
+    const currentItem = await getItem(id);
+    if (!currentItem) return null;
 
-        // If history is empty but we have a current price, initialize it
-        if (priceHistory.length === 0 && currentItem.defaultPrice !== undefined) {
-            priceHistory.push({
-                price: currentItem.defaultPrice,
-                date: currentItem.createdAt || new Date().toISOString()
-            });
-        }
+    const newPrice = itemData.defaultPrice;
+    let priceHistory = currentItem.priceHistory || [];
 
-        // If price has changed, add to history
-        if (newPrice !== undefined && newPrice !== currentItem.defaultPrice) {
-            priceHistory.push({
-                price: newPrice,
-                date: new Date().toISOString()
-            });
-        }
-
-        items[index] = {
-            ...currentItem,
-            ...itemData,
-            priceHistory,
-            id, // Preserve the original ID
-            updatedAt: new Date().toISOString()
-        };
-        saveItems(items);
-        return items[index];
+    if (priceHistory.length === 0 && currentItem.defaultPrice !== undefined) {
+        priceHistory.push({
+            price: currentItem.defaultPrice,
+            date: currentItem.createdAt || new Date().toISOString()
+        });
     }
-    return null;
+
+    if (newPrice !== undefined && newPrice !== currentItem.defaultPrice) {
+        priceHistory.push({
+            price: newPrice,
+            date: new Date().toISOString()
+        });
+    }
+
+    const updated = {
+        ...currentItem,
+        ...itemData,
+        priceHistory,
+        id: currentItem.id,
+        updatedAt: new Date().toISOString()
+    };
+
+    await db.items.put(updated);
+    await loadItemsFromDb();
+    return updated;
 };
 
 /**
  * Save item (create or update)
- * @param {Object} item - Item object
- * @returns {Object} Saved item object
+ * @param {Object} item
+ * @returns {Promise<Object>}
  */
-export const saveItem = (item) => {
-    // If item has an ID, update it
+export const saveItem = async (item) => {
     if (item.id) {
-        return updateItem(item.id, item);
+        return await updateItem(item.id, item);
     }
-
-    // Otherwise create new
-    return createItem(item);
+    return await createItem(item);
 };
 
 /**
  * Delete item by ID
- * @param {number|string} id - Item ID
- * @returns {boolean} Success status
+ * @param {number|string} id
+ * @returns {Promise<boolean>}
  */
-export const deleteItem = (id) => {
+export const deleteItem = async (id) => {
     try {
-        let items = getAllItems();
-        // Convert both to string for reliable comparison
-        items = items.filter(item => String(item.id) !== String(id));
-
-        saveItems(items);
+        const existing = await getItem(id);
+        const targetId = existing ? existing.id : id;
+        await db.items.delete(targetId);
+        await loadItemsFromDb();
         return true;
     } catch (error) {
         console.error('Error deleting item:', error);
@@ -139,7 +142,7 @@ export const deleteItem = (id) => {
 
 /**
  * Create empty item object
- * @returns {Object} Empty item object with default values
+ * @returns {Object}
  */
 export const createEmptyItem = () => {
     return {
@@ -155,11 +158,11 @@ export const createEmptyItem = () => {
 
 /**
  * Export all items to a downloadable JSON file
- * @returns {void}
+ * @returns {Promise<void>}
  */
-export const exportItemsToJSON = () => {
+export const exportItemsToJSON = async () => {
     try {
-        const items = getAllItems();
+        const items = await db.items.toArray();
         const jsonString = JSON.stringify(items, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -171,7 +174,6 @@ export const exportItemsToJSON = () => {
 
         document.body.appendChild(link);
         link.click();
-
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
     } catch (error) {
@@ -182,21 +184,17 @@ export const exportItemsToJSON = () => {
 
 /**
  * Import items from a JSON string
- * @param {string} jsonData - JSON string containing item data
- * @returns {Object} Object with success status and count of imported items
- * @throws {Error} If JSON is invalid or has incorrect structure
+ * @param {string} jsonData
+ * @returns {Promise<Object>}
  */
-export const importItemsFromJSON = (jsonData) => {
+export const importItemsFromJSON = async (jsonData) => {
     try {
-        // Parse JSON
         const importedItems = JSON.parse(jsonData);
 
-        // Validate structure
         if (!Array.isArray(importedItems)) {
             throw new Error('Invalid JSON format: Expected an array of items');
         }
 
-        // Validate each item has required fields
         for (let i = 0; i < importedItems.length; i++) {
             const item = importedItems[i];
             if (!item.name || typeof item.name !== 'string') {
@@ -207,38 +205,38 @@ export const importItemsFromJSON = (jsonData) => {
             }
         }
 
-        const existingItems = getAllItems();
         let importedCount = 0;
+        await db.transaction('rw', db.items, async () => {
+            const existingItems = await db.items.toArray();
 
-        importedItems.forEach(importedItem => {
-            const cleanItemData = { ...importedItem };
-            delete cleanItemData.id;
-            delete cleanItemData.createdAt;
-            delete cleanItemData.updatedAt;
+            for (const importedItem of importedItems) {
+                const cleanItemData = { ...importedItem };
+                delete cleanItemData.id;
+                delete cleanItemData.createdAt;
+                delete cleanItemData.updatedAt;
 
-            const existingIndex = existingItems.findIndex(
-                e => e.name.toLowerCase().trim() === cleanItemData.name.toLowerCase().trim()
-            );
+                const match = existingItems.find(
+                    e => e.name.toLowerCase().trim() === cleanItemData.name.toLowerCase().trim()
+                );
 
-            if (existingIndex !== -1) {
-                existingItems[existingIndex] = {
-                    ...existingItems[existingIndex],
-                    ...cleanItemData,
-                    updatedAt: new Date().toISOString()
-                };
-            } else {
-                // Add new item
-                existingItems.push({
-                    ...cleanItemData,
-                    id: Date.now() + importedCount,
-                    createdAt: new Date().toISOString()
-                });
+                if (match) {
+                    await db.items.put({
+                        ...match,
+                        ...cleanItemData,
+                        updatedAt: new Date().toISOString()
+                    });
+                } else {
+                    await db.items.put({
+                        ...cleanItemData,
+                        id: Date.now() + importedCount,
+                        createdAt: new Date().toISOString()
+                    });
+                }
+                importedCount++;
             }
-            importedCount++;
         });
 
-        saveItems(existingItems);
-
+        await loadItemsFromDb();
         return {
             success: true,
             count: importedCount

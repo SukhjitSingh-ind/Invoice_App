@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Plus,
@@ -19,9 +19,11 @@ import {
     AlertCircle,
     FileCode2
 } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db.js';
 import { TEMPLATES } from '../utils/templates';
-import { getAllClients, saveClient, createEmptyClient } from '../services/clientService';
-import { getSettings } from '../services/settingsService';
+import { saveClient, createEmptyClient } from '../services/clientService.js';
+import { getSettings } from '../services/settingsService.js';
 import { validateGST, validateEmail, validatePhone } from '../utils/validation';
 import {
     filterClients,
@@ -37,17 +39,14 @@ export default function CreateInvoice() {
     const navigate = useNavigate();
     const [selectedClient, setSelectedClient] = useState('');
     const [selectedTemplate, setSelectedTemplate] = useState('');
-    const [clients, setClients] = useState(() => getAllClients());
+    const liveClients = useLiveQuery(() => db.clients.toArray(), []);
+    const clients = useMemo(() => liveClients || [], [liveClients]);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [IsGST, setIsGST] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState(createEmptyClient());
     const { addToast } = useToast();
-
-    const loadClients = useCallback(() => {
-        setClients(getAllClients());
-    }, []);
 
     const handleSearchChange = (e) => {
         setSearchQuery(e.target.value);
@@ -129,7 +128,7 @@ export default function CreateInvoice() {
         setFormData(createEmptyClient());
     };
 
-    const handleSaveClient = () => {
+    const handleSaveClient = async () => {
         const settings = getSettings();
         if (!formData.name.trim()) {
             addToast('Client Name is required!', 'error');
@@ -156,8 +155,7 @@ export default function CreateInvoice() {
             return;
         }
 
-        const saved = saveClient(formData);
-        loadClients();
+        const saved = await saveClient(formData);
         setSelectedClient(saved.id.toString());
         setSearchQuery('');
         setCurrentPage(1);

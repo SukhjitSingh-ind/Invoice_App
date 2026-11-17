@@ -1,11 +1,14 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Package, Plus, Search, Edit2, Trash2, X, Save, DollarSign, Hash, Tag, Download, Upload, TrendingUp } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { getAllItems, saveItem, deleteItem, createEmptyItem, exportItemsToJSON, importItemsFromJSON } from '../services/itemService';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db.js';
+import { saveItem, deleteItem, createEmptyItem, exportItemsToJSON, importItemsFromJSON } from '../services/itemService.js';
 import { useToast } from '../components/Toast';
 
 export default function Items() {
-    const [items, setItems] = useState(() => getAllItems());
+    const liveItems = useLiveQuery(() => db.items.toArray(), []);
+    const items = useMemo(() => liveItems || [], [liveItems]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
@@ -15,10 +18,6 @@ export default function Items() {
     const [viewingHistoryItem, setViewingHistoryItem] = useState(null);
     const { addToast } = useToast();
     const fileInputRef = useRef(null);
-
-    const loadItems = useCallback(() => {
-        setItems(getAllItems());
-    }, []);
 
     const filteredItems = useMemo(() => {
         const query = searchQuery.toLowerCase().trim();
@@ -46,7 +45,7 @@ export default function Items() {
         setFormData(createEmptyItem());
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!formData.name.trim()) {
             addToast('Item name is required!', 'error');
             return;
@@ -57,8 +56,7 @@ export default function Items() {
             return;
         }
 
-        saveItem(formData);
-        loadItems();
+        await saveItem(formData);
         handleCloseModal();
         addToast(editingItem ? 'Item updated successfully!' : 'Item created successfully!', 'success');
     };
@@ -67,10 +65,9 @@ export default function Items() {
         setDeleteConfirm(id);
     };
 
-    const confirmDelete = () => {
+    const confirmDelete = async () => {
         if (deleteConfirm) {
-            deleteItem(deleteConfirm);
-            loadItems();
+            await deleteItem(deleteConfirm);
             setDeleteConfirm(null);
             addToast('Item deleted successfully!', 'success');
         }
@@ -84,9 +81,9 @@ export default function Items() {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleExport = () => {
+    const handleExport = async () => {
         try {
-            exportItemsToJSON();
+            await exportItemsToJSON();
             addToast('Items exported successfully!', 'success');
         } catch {
             addToast('Failed to export items', 'error');
@@ -106,8 +103,7 @@ export default function Items() {
 
         try {
             const text = await file.text();
-            const result = importItemsFromJSON(text);
-            loadItems();
+            const result = await importItemsFromJSON(text);
             addToast(`Successfully imported ${result.count} item(s)!`, 'success');
         } catch (error) {
             addToast(error.message || 'Failed to import items', 'error');

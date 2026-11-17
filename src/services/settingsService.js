@@ -1,99 +1,122 @@
-const SETTINGS_KEY = 'invoice_app_settings';
+import { db } from '../db/db.js';
+import { DEFAULT_INITIAL_SETTINGS } from './migrationService.js';
 
-// Default settings
-const DEFAULT_SETTINGS = {
-    validation: {
-        requireInvoiceNumber: true,
-        requireClientName: true,
-        requireClientMobile: false,
-        priceGreaterThanZero: true,
-        quantityGreaterThanZero: true,
-        requireItemDescription: true
-    },
-    display: {
-        showLogo: true,
-        showQrCode: true,
-        showUnit: true
-    },
-    payment: {
-        upiId: '',
-        payeeName: ''
-    },
-    companyProfiles: [
-        {
-            id: 'default',
-            name: 'GK AUTO ELECTRIC WORKS',
-            address: 'ISHWAR ARCADE shop no 11 asalali Cross\nroad nearby Kheda road Ahmedabad Gujarat.',
-            state: '24-Gujarat',
-            phone: '8141378031',
-            email: 'asr989898@gmail.com',
-            gstNumber: '24DTJPS4161K1Z9',
-            bankDetails: {
-                bankName: 'BANK OF BARODA',
-                accountNumber: '55420200000625',
-                ifscCode: 'BARB0GHOAHM',
-                accountHolder: 'GURU KALGIDAR AUTO ELECTRIC WORKS'
-            },
-            logo: '' // Base64 UUID
-        }
-    ],
-    activeProfileId: 'default'
+let cachedSettings = null;
+
+/**
+ * Hydrates settings cache from Dexie.
+ * Merges app_config with companies table.
+ * @returns {Promise<object>}
+ */
+export const loadSettingsFromDb = async () => {
+    try {
+        const configRecord = await db.settings.get('app_config');
+        const companies = await db.companies.toArray();
+
+        const config = configRecord?.value || DEFAULT_INITIAL_SETTINGS;
+        const profileList = companies.length > 0 ? companies : DEFAULT_INITIAL_SETTINGS.companyProfiles;
+        const activeId = config.activeProfileId || profileList[0]?.id || 'default';
+
+        cachedSettings = {
+            validation: { ...DEFAULT_INITIAL_SETTINGS.validation, ...(config.validation || {}) },
+            display: { ...DEFAULT_INITIAL_SETTINGS.display, ...(config.display || {}) },
+            payment: { ...DEFAULT_INITIAL_SETTINGS.payment, ...(config.payment || {}) },
+            companyProfiles: profileList,
+            activeProfileId: activeId
+        };
+        return cachedSettings;
+    } catch (error) {
+        console.error('Error loading settings from Dexie:', error);
+        cachedSettings = { ...DEFAULT_INITIAL_SETTINGS };
+        return cachedSettings;
+    }
 };
 
 /**
- * Get current settings from localStorage
- * @returns {Object} Current settings object
+ * Get current settings (synchronous from cache, fallback to defaults).
+ * @returns {object}
  */
 export const getSettings = () => {
-    try {
-        const data = localStorage.getItem(SETTINGS_KEY);
-        if (!data) {
-            localStorage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS));
-            return DEFAULT_SETTINGS;
-        }
-        const saved = JSON.parse(data);
+    if (cachedSettings) return cachedSettings;
+    return { ...DEFAULT_INITIAL_SETTINGS };
+};
 
-        return {
-            ...DEFAULT_SETTINGS,
-            ...saved,
-            validation: { ...DEFAULT_SETTINGS.validation, ...saved.validation },
-            display: { ...DEFAULT_SETTINGS.display, ...saved.display },
-            payment: { ...DEFAULT_SETTINGS.payment, ...saved.payment },
-            companyProfiles: saved.companyProfiles || DEFAULT_SETTINGS.companyProfiles,
-            activeProfileId: saved.activeProfileId || DEFAULT_SETTINGS.activeProfileId
+/**
+ * Get settings asynchronously directly from Dexie.
+ * @returns {Promise<object>}
+ */
+export const getSettingsAsync = async () => {
+    return await loadSettingsFromDb();
+};
+
+/**
+ * Update application settings in Dexie.
+ * @param {object} newSettings
+ * @returns {Promise<object>}
+ */
+export const updateSettings = async (newSettings) => {
+    try {
+        const current = cachedSettings || DEFAULT_INITIAL_SETTINGS;
+        const merged = {
+            ...current,
+            ...newSettings,
+            validation: { ...current.validation, ...(newSettings.validation || {}) },
+            display: { ...current.display, ...(newSettings.display || {}) },
+            payment: { ...current.payment, ...(newSettings.payment || {}) },
+            activeProfileId: newSettings.activeProfileId || current.activeProfileId
         };
+
+        await db.transaction('rw', [db.settings, db.companies], async () => {
+            await db.settings.put({
+                key: 'app_config',
+                value: {
+                    validation: merged.validation,
+                    display: merged.display,
+                    payment: merged.payment,
+                    activeProfileId: merged.activeProfileId
+                }
+            });
+
+            if (Array.isArray(newSettings.companyProfiles)) {
+                await db.companies.clear();
+                await db.companies.bulkPut(newSettings.companyProfiles);
+                merged.companyProfiles = newSettings.companyProfiles;
+            }
+        });
+
+        cachedSettings = merged;
+        return merged;
     } catch (error) {
-        console.error('Error loading settings:', error);
-        return DEFAULT_SETTINGS;
+        console.error('Error saving settings to Dexie:', error);
+        return newSettings;
     }
 };
 
 /**
- * Update settings in localStorage
- * @param {Object} newSettings - New settings object
- * @returns {Object} Updated settings
+ * Reset settings to default values.
+ * @returns {Promise<object>}
  */
-export const updateSettings = (newSettings) => {
+export const resetSettings = async () => {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
-        return newSettings;
-    } catch (error) {
-        console.error('Error saving settings:', error);
-        return newSettings;
-    }
-};
+        await db.transaction('rw', [db.settings, db.companies], async () => {
+            await db.settings.put({
+                key: 'app_config',
+                value: {
+                    validation: DEFAULT_INITIAL_SETTINGS.validation,
+                    display: DEFAULT_INITIAL_SETTINGS.display,
+                    payment: DEFAULT_INITIAL_SETTINGS.payment,
+                    activeProfileId: DEFAULT_INITIAL_SETTINGS.activeProfileId
+                }
+            });
+            await db.companies.clear();
+            await db.companies.bulkPut(DEFAULT_INITIAL_SETTINGS.companyProfiles);
+        });
 
-/**
- * Reset settings to defaults
- * @returns {Object} Default settings
- */
-export const resetSettings = () => {
-    try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS));
-        return DEFAULT_SETTINGS;
+        cachedSettings = { ...DEFAULT_INITIAL_SETTINGS };
+        return cachedSettings;
     } catch (error) {
         console.error('Error resetting settings:', error);
-        return DEFAULT_SETTINGS;
+        return DEFAULT_INITIAL_SETTINGS;
     }
 };
 
@@ -104,60 +127,62 @@ export const getCompanyProfiles = () => {
     return settings.companyProfiles || [];
 };
 
+export const getCompanyProfilesAsync = async () => {
+    const companies = await db.companies.toArray();
+    return companies.length > 0 ? companies : DEFAULT_INITIAL_SETTINGS.companyProfiles;
+};
+
 export const getActiveProfile = () => {
     const settings = getSettings();
     const profiles = settings.companyProfiles || [];
     return profiles.find(p => p.id === settings.activeProfileId) || profiles[0] || null;
 };
 
-export const addCompanyProfile = (profile) => {
-    const settings = getSettings();
+export const getActiveProfileAsync = async () => {
+    await loadSettingsFromDb();
+    return getActiveProfile();
+};
+
+export const addCompanyProfile = async (profile) => {
     const newProfile = { ...profile, id: Date.now().toString() };
-    const updatedSettings = {
-        ...settings,
-        companyProfiles: [...(settings.companyProfiles || []), newProfile]
-    };
-    updateSettings(updatedSettings);
+    await db.companies.put(newProfile);
+    await loadSettingsFromDb();
     return newProfile;
 };
 
-export const updateCompanyProfile = (id, updates) => {
-    const settings = getSettings();
-    const updatedProfiles = (settings.companyProfiles || []).map(p =>
-        p.id === id ? { ...p, ...updates } : p
-    );
-    const updatedSettings = { ...settings, companyProfiles: updatedProfiles };
-    updateSettings(updatedSettings);
-    return updatedProfiles.find(p => p.id === id);
+export const updateCompanyProfile = async (id, updates) => {
+    const existing = await db.companies.get(id);
+    if (!existing) return null;
+    const updated = { ...existing, ...updates, id };
+    await db.companies.put(updated);
+    await loadSettingsFromDb();
+    return updated;
 };
 
-export const deleteCompanyProfile = (id) => {
-    const settings = getSettings();
-    const profiles = settings.companyProfiles || [];
+export const deleteCompanyProfile = async (id) => {
+    const companies = await db.companies.toArray();
+    if (companies.length <= 1) return false;
 
-    // Prevent deleting the last profile
-    if (profiles.length <= 1) return false;
+    await db.transaction('rw', [db.companies, db.settings], async () => {
+        await db.companies.delete(id);
+        const remaining = await db.companies.toArray();
+        const configRecord = await db.settings.get('app_config');
+        if (configRecord && configRecord.value.activeProfileId === id) {
+            configRecord.value.activeProfileId = remaining[0]?.id || 'default';
+            await db.settings.put(configRecord);
+        }
+    });
 
-    const updatedProfiles = profiles.filter(p => p.id !== id);
-
-    // If active profile is deleted, switch to the first one
-    let activeProfileId = settings.activeProfileId;
-    if (activeProfileId === id) {
-        activeProfileId = updatedProfiles[0].id;
-    }
-
-    const updatedSettings = {
-        ...settings,
-        companyProfiles: updatedProfiles,
-        activeProfileId
-    };
-    updateSettings(updatedSettings);
+    await loadSettingsFromDb();
     return true;
 };
 
-export const setActiveProfile = (id) => {
-    const settings = getSettings();
-    const updatedSettings = { ...settings, activeProfileId: id };
-    updateSettings(updatedSettings);
+export const setActiveProfile = async (id) => {
+    const configRecord = await db.settings.get('app_config');
+    if (configRecord) {
+        configRecord.value.activeProfileId = id;
+        await db.settings.put(configRecord);
+    }
+    await loadSettingsFromDb();
     return true;
 };

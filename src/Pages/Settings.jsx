@@ -25,15 +25,15 @@ export default function Settings() {
         setSaved(false);
     };
 
-    const handleSave = () => {
-        updateSettings(settings);
+    const handleSave = async () => {
+        await updateSettings(settings);
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
     };
 
-    const handleReset = () => {
+    const handleReset = async () => {
         if (window.confirm('Are you sure you want to reset all settings to defaults?')) {
-            const defaults = resetSettings();
+            const defaults = await resetSettings();
             setSettings(defaults);
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);
@@ -276,19 +276,19 @@ export default function Settings() {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                     </svg>
                                 )}
-                                onExport={() => {
-                                    const result = exportFullBackup();
+                                onExport={async () => {
+                                    const result = await exportFullBackup();
                                     if (result.success) {
                                         addToast('Full backup exported successfully!', 'success');
                                     } else {
                                         addToast(`Failed to export full backup: ${result.message}`, 'error');
                                     }
                                 }}
-                                onImport={(fileContent) => {
+                                onImport={async (fileContent) => {
                                     if (!window.confirm('Restoring a full backup will overwrite existing invoices, clients, items, and settings. Continue?')) {
                                         return;
                                     }
-                                    const result = importFullBackup(fileContent);
+                                    const result = await importFullBackup(fileContent);
                                     if (result.success) {
                                         addToast(
                                             `Backup restored. Invoices: ${result.counts.invoices}, Clients: ${result.counts.clients}, Items: ${result.counts.items}`,
@@ -316,13 +316,13 @@ export default function Settings() {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
                                 )}
-                                onExport={() => {
-                                    const success = exportInvoices();
+                                onExport={async () => {
+                                    const success = await exportInvoices();
                                     if (success) addToast('Invoices exported successfully!', 'success');
                                     else addToast('Failed to export invoices', 'error');
                                 }}
-                                onImport={(fileContent) => {
-                                    const result = importInvoices(fileContent);
+                                onImport={async (fileContent) => {
+                                    const result = await importInvoices(fileContent);
                                     if (result.success) {
                                         addToast(`Imported ${result.added} new, Updated ${result.updated} invoices`, 'success');
                                     } else {
@@ -339,17 +339,17 @@ export default function Settings() {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                                     </svg>
                                 )}
-                                onExport={() => {
+                                onExport={async () => {
                                     try {
-                                        exportClientsToJSON();
+                                        await exportClientsToJSON();
                                         addToast('Clients exported successfully!', 'success');
                                     } catch {
                                         addToast('Failed to export clients', 'error');
                                     }
                                 }}
-                                onImport={(fileContent) => {
+                                onImport={async (fileContent) => {
                                     try {
-                                        const result = importClientsFromJSON(fileContent);
+                                        const result = await importClientsFromJSON(fileContent);
                                         if (result.success) {
                                             addToast(`Imported ${result.count} clients successfully`, 'success');
                                         }
@@ -367,17 +367,17 @@ export default function Settings() {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                                     </svg>
                                 )}
-                                onExport={() => {
+                                onExport={async () => {
                                     try {
-                                        exportItemsToJSON();
+                                        await exportItemsToJSON();
                                         addToast('Items exported successfully!', 'success');
                                     } catch {
                                         addToast('Failed to export items', 'error');
                                     }
                                 }}
-                                onImport={(fileContent) => {
+                                onImport={async (fileContent) => {
                                     try {
-                                        const result = importItemsFromJSON(fileContent);
+                                        const result = await importItemsFromJSON(fileContent);
                                         if (result.success) {
                                             addToast(`Imported ${result.count} items successfully`, 'success');
                                         }

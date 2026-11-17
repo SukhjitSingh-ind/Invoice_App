@@ -82,18 +82,32 @@ export default function InvoicePreview() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [settings] = useState(() => getSettings());
-  const [invoice] = useState(() => (id ? getInvoice(id) || null : null));
+  const [invoice, setInvoice] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
-    if (id && !invoice) {
+    let isMounted = true;
+    if (id) {
+      getInvoice(id).then((inv) => {
+        if (isMounted) {
+          if (inv) {
+            setInvoice(inv);
+          } else {
+            navigate('/');
+          }
+          setLoading(false);
+        }
+      });
+    } else {
       navigate('/');
     }
-  }, [id, invoice, navigate]);
+    return () => { isMounted = false; };
+  }, [id, navigate]);
 
-  if (!invoice) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (loading || !invoice) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
   const template = getTemplateById(invoice.template || 'default');
 

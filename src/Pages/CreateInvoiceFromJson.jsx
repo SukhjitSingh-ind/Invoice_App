@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
     FileCode2,
@@ -29,8 +29,10 @@ import {
     Code2,
     RefreshCw
 } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db.js';
 import { TEMPLATES, getTemplateById } from '../utils/templates.js';
-import { getAllClients, saveClient, createEmptyClient } from '../services/clientService.js';
+import { saveClient, createEmptyClient } from '../services/clientService.js';
 import { getSettings, getActiveProfile } from '../services/settingsService.js';
 import { getNextInvoiceNumber } from '../services/invoiceService.js';
 import { validateGST, validateEmail, validatePhone } from '../utils/validation.ts';
@@ -60,7 +62,8 @@ export default function CreateInvoiceFromJson() {
     const [copied, setCopied] = useState(false);
 
     // Client selection state
-    const [clients, setClients] = useState(() => getAllClients());
+    const liveClients = useLiveQuery(() => db.clients.toArray(), []);
+    const clients = useMemo(() => liveClients || [], [liveClients]);
     const [selectedClientId, setSelectedClientId] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
@@ -77,7 +80,11 @@ export default function CreateInvoiceFromJson() {
 
     // Active company profile & settings
     const activeProfile = useMemo(() => getActiveProfile(), []);
-    const nextInvoiceNumber = useMemo(() => getNextInvoiceNumber(), []);
+    const [nextInvoiceNumber, setNextInvoiceNumber] = useState('1');
+
+    useEffect(() => {
+        getNextInvoiceNumber().then(num => setNextInvoiceNumber(num));
+    }, []);
 
     // 1. Live Parse & Validate JSON
     const parseResult = useMemo(() => {
@@ -94,11 +101,6 @@ export default function CreateInvoiceFromJson() {
         }
         return parseAndValidateInvoiceJson(jsonInput);
     }, [jsonInput]);
-
-    // Refresh client directory
-    const reloadClients = useCallback(() => {
-        setClients(getAllClients());
-    }, []);
 
     // 2. Resolve selected manual client object
     const manualClient = useMemo(() => {
@@ -225,7 +227,7 @@ export default function CreateInvoiceFromJson() {
         }
     };
 
-    const handleSaveClientModal = () => {
+    const handleSaveClientModal = async () => {
         const settings = getSettings();
         if (!clientFormData.name.trim()) {
             addToast('Client Name is required!', 'error');
@@ -252,8 +254,7 @@ export default function CreateInvoiceFromJson() {
             return;
         }
 
-        const saved = saveClient(clientFormData);
-        reloadClients();
+        const saved = await saveClient(clientFormData);
         setSelectedClientId(saved.id.toString());
         setSearchQuery('');
         setCurrentPage(1);
