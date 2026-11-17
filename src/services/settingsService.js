@@ -72,6 +72,13 @@ export const getSettingsAsync = async () => {
 export const updateSettings = async (newSettings) => {
     try {
         const current = cachedSettings || DEFAULT_INITIAL_SETTINGS;
+        let resolvedTemplateId = current.selectedTemplateId;
+        if (newSettings.selectedTemplateId !== undefined) {
+            resolvedTemplateId = await resolveValidTemplateId(newSettings.selectedTemplateId, db);
+        } else if (resolvedTemplateId === null || resolvedTemplateId === undefined) {
+            resolvedTemplateId = await resolveValidTemplateId(null, db);
+        }
+
         const merged = {
             ...current,
             ...newSettings,
@@ -79,9 +86,7 @@ export const updateSettings = async (newSettings) => {
             display: { ...current.display, ...(newSettings.display || {}) },
             payment: { ...current.payment, ...(newSettings.payment || {}) },
             activeProfileId: newSettings.activeProfileId || current.activeProfileId,
-            selectedTemplateId: newSettings.selectedTemplateId !== undefined
-                ? newSettings.selectedTemplateId
-                : (current.selectedTemplateId ?? null)
+            selectedTemplateId: resolvedTemplateId
         };
 
         await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, [db.settings, db.companies], async () => {
@@ -220,19 +225,20 @@ export const getSelectedTemplateId = () => {
 };
 
 export const setSelectedTemplateId = async (id) => {
+    const validId = await resolveValidTemplateId(id, db);
     let configRecord = await db.settings.get(STORAGE_KEYS.APP_CONFIG);
     if (!configRecord) {
         configRecord = {
             key: STORAGE_KEYS.APP_CONFIG,
             value: {
                 ...DEFAULT_INITIAL_SETTINGS,
-                selectedTemplateId: id
+                selectedTemplateId: validId
             }
         };
     } else {
         configRecord.value = {
             ...(configRecord.value || {}),
-            selectedTemplateId: id
+            selectedTemplateId: validId
         };
     }
     await db.settings.put(configRecord);

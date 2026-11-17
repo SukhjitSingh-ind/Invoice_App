@@ -241,5 +241,18 @@ export async function deleteTemplateAsync(id, dbInstance = db) {
     }
     const numId = typeof id === 'string' && /^\d+$/.test(id) ? Number(id) : id;
     await dbInstance.templates.delete(numId);
+
+    if (dbInstance.settings) {
+        try {
+            const configRecord = await dbInstance.settings.get(STORAGE_KEYS.APP_CONFIG);
+            if (configRecord && configRecord.value && configRecord.value.selectedTemplateId === numId) {
+                const fallbackId = await resolveValidTemplateId(null, dbInstance);
+                configRecord.value.selectedTemplateId = fallbackId;
+                await dbInstance.settings.put(configRecord);
+            }
+        } catch {
+            // Non-critical settings cleanup
+        }
+    }
     return true;
 }

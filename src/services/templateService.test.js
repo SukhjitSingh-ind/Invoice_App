@@ -318,6 +318,24 @@ async function runTests() {
         await updateSettings({ selectedTemplateId: modernInAppDb.id });
         const syncSettings = getSettings();
         assert(syncSettings.selectedTemplateId === modernInAppDb.id, 'getSettings reflects selectedTemplateId updated by updateSettings');
+
+        // Test updateSettings with invalid template ID: must resolve to default and not persist invalid ID
+        const classicInAppDb = await db.templates.where('name').equals(BUILT_IN_TEMPLATE_NAMES.CLASSIC).first();
+        await updateSettings({ selectedTemplateId: 99999 });
+        assert(getSettings().selectedTemplateId === classicInAppDb.id, 'updateSettings with nonexistent ID resolves to default template ID');
+        const dbConfigAfterInvalidUpdate = await db.settings.get(STORAGE_KEYS.APP_CONFIG);
+        assert(dbConfigAfterInvalidUpdate.value.selectedTemplateId === classicInAppDb.id, 'updateSettings with nonexistent ID persists default template to DB');
+
+        // Test updateSettings partial update: omitting selectedTemplateId preserves existing selection
+        await setSelectedTemplateId(modernInAppDb.id);
+        await updateSettings({ display: { showTaxBreakup: true } });
+        assert(getSettings().selectedTemplateId === modernInAppDb.id, 'updateSettings without selectedTemplateId preserves existing selection');
+
+        // Test setSelectedTemplateId with nonexistent ID: resolves to default template
+        await setSelectedTemplateId(77777);
+        assert(getSelectedTemplateId() === classicInAppDb.id, 'setSelectedTemplateId with invalid ID resolves to default template');
+        const dbConfigAfterInvalidSet = await db.settings.get(STORAGE_KEYS.APP_CONFIG);
+        assert(dbConfigAfterInvalidSet.value.selectedTemplateId === classicInAppDb.id, 'setSelectedTemplateId persists resolved fallback to DB');
     }
 
     // Repaired settings persistence: corrupt selectedTemplateId in db.settings, verify loadSettingsFromDb persists repair
