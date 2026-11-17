@@ -13,6 +13,7 @@ export const INVOICE_STATUS = Object.freeze({
 export const PAYMENT_STATUS = Object.freeze({
     PAID: 'Paid',
     UNPAID: 'Unpaid',
+    FULLY_PAID: 'Fully Paid',
 });
 
 export const CURRENCY = Object.freeze({
@@ -43,6 +44,7 @@ export const DEFAULT_ITEM_UNIT = 'Pcs';
 export const DEFAULT_TEMPLATE = 'default';
 
 export const MAX_IMAGE_SIZE_BYTES = 500000;
+export const MAX_LOGO_SIZE_BYTES = 5000000;
 
 export const MONEY_DECIMAL_PRECISION = 2;
 export const PERCENTAGE_FACTOR = 100;

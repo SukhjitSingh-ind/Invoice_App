@@ -10,6 +10,7 @@ import {
     setActiveProfile
 } from '../services/settingsService';
 import { useToast } from '../components/Toast';
+import { DEFAULT_STATE, TOAST_TYPES, MAX_LOGO_SIZE_BYTES } from '../constants/index.js';
 
 export default function YourDetails() {
     const [profiles, setProfiles] = useState(() => getCompanyProfiles());
@@ -91,7 +92,7 @@ export default function YourDetails() {
         setSelectedProfileId(created.id);
         setFormData(created);
         setIsDirty(false);
-        addToast('New profile created', 'success');
+        addToast('New profile created', TOAST_TYPES.SUCCESS);
     };
 
     const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -99,7 +100,7 @@ export default function YourDetails() {
     const handleDeleteProfile = (e, id) => {
         e.stopPropagation();
         if (profiles.length <= 1) {
-            addToast('Cannot delete the last profile', 'error');
+            addToast('Cannot delete the last profile', TOAST_TYPES.ERROR);
             return;
         }
         setDeleteConfirm(id);
@@ -112,7 +113,7 @@ export default function YourDetails() {
         const success = await deleteCompanyProfile(id);
 
         if (success) {
-            addToast('Profile deleted', 'success');
+            addToast('Profile deleted', TOAST_TYPES.SUCCESS);
             // If we deleted the selected profile, switch to the first available
             if (id === selectedProfileId) {
                 const remaining = profiles.filter(p => p.id !== id);
@@ -130,7 +131,7 @@ export default function YourDetails() {
         e.stopPropagation();
         await setActiveProfile(id);
         setActiveProfileId(id);
-        addToast('Active profile updated', 'success');
+        addToast('Active profile updated', TOAST_TYPES.SUCCESS);
     };
 
     const handleChange = (field, value) => {
@@ -155,8 +156,8 @@ export default function YourDetails() {
     const handleLogoUpload = (e) => {
         const file = e.target.files[0];
         if (file) {
-            if (file.size > 5000000) { // 5MB limit
-                addToast('File size too large (max 5MB)', 'error');
+            if (file.size > MAX_LOGO_SIZE_BYTES) { // 5MB limit
+                addToast('File size too large (max 5MB)', TOAST_TYPES.ERROR);
                 return;
             }
 
@@ -174,18 +175,18 @@ export default function YourDetails() {
 
     const handleSave = async () => {
         if (!formData.name.trim()) {
-            addToast('Company Name is required', 'error');
+            addToast('Company Name is required', TOAST_TYPES.ERROR);
             return;
         }
 
         if (!formData.logo) {
-            addToast('Company Logo is required', 'error');
+            addToast('Company Logo is required', TOAST_TYPES.ERROR);
             return;
         }
         await updateCompanyProfile(selectedProfileId, formData);
         setIsDirty(false);
         loadData(); // Refresh list to show updated names etc
-        addToast('Profile saved successfully', 'success');
+        addToast('Profile saved successfully', TOAST_TYPES.SUCCESS);
     };
 
     if (!formData) return <div>Loading...</div>;
@@ -386,7 +387,7 @@ export default function YourDetails() {
                                     value={formData.state || ''}
                                     onChange={(e) => handleChange('state', e.target.value)}
                                     className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                    placeholder="e.g. 24-Gujarat"
+                                    placeholder={`e.g. ${DEFAULT_STATE}`}
                                 />
                             </div>
 

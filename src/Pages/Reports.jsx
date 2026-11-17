@@ -11,7 +11,13 @@ import {
     getTopItemsByRevenue
 } from '../services/reportService';
 import { useToast } from '../components/Toast';
-import { ROUTES, DEFAULT_LOCALE } from '../constants/index.js';
+import {
+    ROUTES,
+    PERCENTAGE_FACTOR,
+    MONEY_DECIMAL_PRECISION,
+    DEFAULT_LOCALE,
+    TOAST_TYPES
+} from '../constants/index.js';
 
 // Color palette for charts
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#6366f1', '#84cc16', '#f97316', '#14b8a6'];
@@ -53,9 +59,9 @@ export default function Reports() {
             XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
             const timestamp = new Date().toISOString().split('T')[0];
             XLSX.writeFile(workbook, `${filename}_${timestamp}.xlsx`);
-            addToast('Report exported to Excel successfully!', 'success');
+            addToast('Report exported to Excel successfully!', TOAST_TYPES.SUCCESS);
         } catch {
-            addToast('Failed to export to Excel', 'error');
+            addToast('Failed to export to Excel', TOAST_TYPES.ERROR);
         }
     };
 
@@ -66,7 +72,7 @@ export default function Reports() {
         // Summary sheet
         const summaryData = [{
             'Metric': 'Total Revenue',
-            'Value': `₹${summary.totalRevenue.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}`
+            'Value': `₹${summary.totalRevenue.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}`
         }, {
             'Metric': 'Total Invoices',
             'Value': summary.totalInvoices
@@ -84,11 +90,11 @@ export default function Reports() {
         const itemsData = itemSales.map(item => ({
             'Item Name': item.itemName,
             'Quantity Sold': item.totalQuantity,
-            'Total Revenue': `₹${item.totalRevenue.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}`,
+            'Total Revenue': `₹${item.totalRevenue.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}`,
             'Times Sold': item.timesSold,
-            'Average Price': `₹${item.averagePrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}`,
-            'Min Price': `₹${item.minPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}`,
-            'Max Price': `₹${item.maxPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}`
+            'Average Price': `₹${item.averagePrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}`,
+            'Min Price': `₹${item.minPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}`,
+            'Max Price': `₹${item.maxPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}`
         }));
         const itemsSheet = XLSX.utils.json_to_sheet(itemsData);
         XLSX.utils.book_append_sheet(workbook, itemsSheet, 'Item Sales');
@@ -97,7 +103,7 @@ export default function Reports() {
         const clientsData = clientPurchases.map(client => ({
             'Client Name': client.clientName,
             'Total Invoices': client.totalInvoices,
-            'Total Spent': `₹${client.totalSpent.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}`,
+            'Total Spent': `₹${client.totalSpent.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}`,
             'Items Purchased': client.itemsPurchased.length
         }));
         const clientsSheet = XLSX.utils.json_to_sheet(clientsData);
@@ -105,7 +111,7 @@ export default function Reports() {
 
         const timestamp = new Date().toISOString().split('T')[0];
         XLSX.writeFile(workbook, `complete_report_${timestamp}.xlsx`);
-        addToast('Complete report exported to Excel!', 'success');
+        addToast('Complete report exported to Excel!', TOAST_TYPES.SUCCESS);
     };
 
     const handleExportItems = () => {
@@ -213,7 +219,7 @@ export default function Reports() {
                             <DollarSign size={32} className="opacity-80" />
                             <h3 className="text-lg font-bold opacity-90">Total Revenue</h3>
                         </div>
-                        <p className="text-3xl font-black">₹{summary.totalRevenue.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</p>
+                        <p className="text-3xl font-black">₹{summary.totalRevenue.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}</p>
                     </div>
 
                     <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-xl">
@@ -258,7 +264,7 @@ export default function Reports() {
                                             cx="50%"
                                             cy="45%"
                                             labelLine={false}
-                                            label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                                            label={({ percent }) => `${(percent * PERCENTAGE_FACTOR).toFixed(0)}%`}
                                             outerRadius={65}
                                             fill="#8884d8"
                                             dataKey="value"
@@ -267,7 +273,7 @@ export default function Reports() {
                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
                                         </Pie>
-                                        <Tooltip formatter={(value) => `₹${value.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}`} />
+                                        <Tooltip formatter={(value) => `₹${value.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}`} />
                                         <Legend
                                             verticalAlign="bottom"
                                             height={90}
@@ -296,7 +302,7 @@ export default function Reports() {
                                             cx="50%"
                                             cy="45%"
                                             labelLine={false}
-                                            label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                                            label={({ percent }) => `${(percent * PERCENTAGE_FACTOR).toFixed(0)}%`}
                                             outerRadius={65}
                                             fill="#8884d8"
                                             dataKey="value"
@@ -334,7 +340,7 @@ export default function Reports() {
                                             cx="50%"
                                             cy="45%"
                                             labelLine={false}
-                                            label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                                            label={({ percent }) => `${(percent * PERCENTAGE_FACTOR).toFixed(0)}%`}
                                             outerRadius={65}
                                             fill="#8884d8"
                                             dataKey="value"
@@ -343,7 +349,7 @@ export default function Reports() {
                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
                                         </Pie>
-                                        <Tooltip formatter={(value) => `₹${value.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}`} />
+                                        <Tooltip formatter={(value) => `₹${value.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}`} />
                                         <Legend
                                             verticalAlign="bottom"
                                             height={90}
@@ -421,17 +427,17 @@ export default function Reports() {
                                                 <td className="py-3 px-4 font-semibold text-slate-900">{item.itemName}</td>
                                                 <td className="py-3 px-4 text-center text-slate-700">{item.totalQuantity}</td>
                                                 <td className="py-3 px-4 text-right font-bold text-blue-600">
-                                                    ₹{item.totalRevenue.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                                                    ₹{item.totalRevenue.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                                 </td>
                                                 <td className="py-3 px-4 text-center text-slate-700">{item.timesSold}</td>
                                                 <td className="py-3 px-4 text-right text-slate-700">
-                                                    ₹{item.averagePrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                                                    ₹{item.averagePrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                                 </td>
                                                 <td className="py-3 px-4 text-right text-green-600 font-medium">
-                                                    ₹{item.minPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                                                    ₹{item.minPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                                 </td>
                                                 <td className="py-3 px-4 text-right text-red-600 font-medium">
-                                                    ₹{item.maxPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                                                    ₹{item.maxPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                                 </td>
                                                 <td className="py-3 px-4 text-center">
                                                     <button
@@ -456,7 +462,7 @@ export default function Reports() {
                                                                     <span className="text-slate-600">{instance.date}</span>
                                                                     <span className="font-medium text-slate-900">{instance.clientName}</span>
                                                                     <span className="text-slate-600">Qty: {instance.quantity}</span>
-                                                                    <span className="font-bold text-blue-600">₹{instance.price.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
+                                                                    <span className="font-bold text-blue-600">₹{instance.price.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}</span>
                                                                     <span className="text-slate-500">Invoice #{instance.invoiceNumber}</span>
                                                                 </div>
                                                             ))}
@@ -509,7 +515,7 @@ export default function Reports() {
                                                 <td className="py-3 px-4 font-semibold text-slate-900">{client.clientName}</td>
                                                 <td className="py-3 px-4 text-center text-slate-700">{client.totalInvoices}</td>
                                                 <td className="py-3 px-4 text-right font-bold text-purple-600">
-                                                    ₹{client.totalSpent.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                                                    ₹{client.totalSpent.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                                 </td>
                                                 <td className="py-3 px-4 text-center text-slate-700">{client.itemsPurchased.length}</td>
                                                 <td className="py-3 px-4 text-center">
@@ -536,7 +542,7 @@ export default function Reports() {
                                                                     <div className="flex gap-4">
                                                                         <span className="text-slate-600">Qty: {item.quantity}</span>
                                                                         <span className="font-bold text-purple-600">
-                                                                            ₹{item.totalCost.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                                                                            ₹{item.totalCost.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                                                         </span>
                                                                     </div>
                                                                 </div>

@@ -34,7 +34,7 @@ import {
     CLIENTS_PER_PAGE
 } from '../utils/clientHelpers';
 import { useToast } from '../components/Toast';
-import { ROUTES } from '../constants/index.js';
+import { ROUTES, PAGINATION, APP_DEFAULTS, TOAST_TYPES } from '../constants/index.js';
 
 export default function CreateInvoice() {
     const navigate = useNavigate();
@@ -43,8 +43,8 @@ export default function CreateInvoice() {
     const liveClients = useLiveQuery(() => db.clients.toArray(), []);
     const clients = useMemo(() => liveClients || [], [liveClients]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
-    const [IsGST, setIsGST] = useState(false);
+    const [currentPage, setCurrentPage] = useState(PAGINATION.DEFAULT_PAGE);
+    const [IsGST, setIsGST] = useState(APP_DEFAULTS.DEFAULT_IS_GST);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState(createEmptyClient());
     const { addToast } = useToast();
@@ -101,7 +101,7 @@ export default function CreateInvoice() {
     const handleCreate = (templateId) => {
         const activeTemplate = templateId || selectedTemplate;
         if (!activeTemplate) {
-            addToast('Please select an invoice template to continue!', 'error');
+            addToast('Please select an invoice template to continue!', TOAST_TYPES.ERROR);
             return;
         }
 
@@ -132,36 +132,36 @@ export default function CreateInvoice() {
     const handleSaveClient = async () => {
         const settings = getSettings();
         if (!formData.name.trim()) {
-            addToast('Client Name is required!', 'error');
+            addToast('Client Name is required!', TOAST_TYPES.ERROR);
             return;
         }
 
         if (settings.validation.requireClientMobile && !formData.mobile.trim()) {
-            addToast('Mobile Number is required (as per Settings)!', 'error');
+            addToast('Mobile Number is required (as per Settings)!', TOAST_TYPES.ERROR);
             return;
         }
 
         if (formData.mobile && !validatePhone(formData.mobile)) {
-            addToast('Please enter a valid mobile number.', 'error');
+            addToast('Please enter a valid mobile number.', TOAST_TYPES.ERROR);
             return;
         }
 
         if (formData.email && !validateEmail(formData.email)) {
-            addToast('Please enter a valid email address.', 'error');
+            addToast('Please enter a valid email address.', TOAST_TYPES.ERROR);
             return;
         }
 
         if (formData.gstNumber && !validateGST(formData.gstNumber)) {
-            addToast('Invalid GST Number format!', 'error');
+            addToast('Invalid GST Number format!', TOAST_TYPES.ERROR);
             return;
         }
 
         const saved = await saveClient(formData);
         setSelectedClient(saved.id.toString());
         setSearchQuery('');
-        setCurrentPage(1);
+        setCurrentPage(PAGINATION.DEFAULT_PAGE);
         handleCloseModal();
-        addToast(`Client "${saved.name}" created and selected!`, 'success');
+        addToast(`Client "${saved.name}" created and selected!`, TOAST_TYPES.SUCCESS);
     };
 
     const handleChange = (field, value) => {

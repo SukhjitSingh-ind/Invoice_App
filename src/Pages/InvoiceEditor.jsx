@@ -11,11 +11,13 @@ import { calculateInvoiceTotals } from '../utils/invoiceCalculations';
 import { validateGST } from '../utils/validation';
 import {
   ROUTES,
+  getPreviewInvoiceRoute,
   STORAGE_KEYS,
   DEFAULT_GST_RATE,
   DEFAULT_ITEM_UNIT,
   MAX_IMAGE_SIZE_BYTES,
-  DEFAULT_LOCALE
+  DEFAULT_LOCALE,
+  TOAST_TYPES
 } from '../constants/index.js';
 
 
@@ -232,23 +234,23 @@ export default function InvoiceEditor() {
   const handleSave = async () => {
     const isValid = await validateInvoice();
     if (!isValid) {
-      addToast('Please fix the validation errors before saving.', 'error');
+      addToast('Please fix the validation errors before saving.', TOAST_TYPES.ERROR);
       return;
     }
 
     if (Object.keys(validationErrors).length > 0) {
       setValidationErrors(validationErrors);
-      addToast('Please check the highlighted fields', 'error');
+      addToast('Please check the highlighted fields', TOAST_TYPES.ERROR);
       return;
     }
 
     try {
       const savedInvoice = await saveInvoice({ ...invoice, customization });
-      addToast('Invoice saved successfully!', 'success');
-      navigate(`/preview/${savedInvoice.id}`);
+      addToast('Invoice saved successfully!', TOAST_TYPES.SUCCESS);
+      navigate(getPreviewInvoiceRoute(savedInvoice.id));
     } catch (err) {
       console.error('Save error:', err);
-      addToast('Failed to save invoice', 'error');
+      addToast('Failed to save invoice', TOAST_TYPES.ERROR);
     }
   };
 
@@ -284,7 +286,7 @@ export default function InvoiceEditor() {
 
   const addItemFromLibrary = () => {
     if (!selectedLibraryItem) {
-      addToast('Please select an item from the library', 'warning');
+      addToast('Please select an item from the library', TOAST_TYPES.WARNING);
       return;
     }
 
@@ -306,7 +308,7 @@ export default function InvoiceEditor() {
     }));
 
     setSelectedLibraryItem('');
-    addToast('Item added from library', 'success');
+    addToast('Item added from library', TOAST_TYPES.SUCCESS);
   };
 
   const removeItem = (id) => {
@@ -321,7 +323,7 @@ export default function InvoiceEditor() {
     const file = e.target.files[0];
     if (file) {
       if (file.size > MAX_IMAGE_SIZE_BYTES) { // 500KB limit
-        addToast('Image size should be less than 500KB', 'error');
+        addToast('Image size should be less than 500KB', TOAST_TYPES.ERROR);
         return;
       }
       const reader = new FileReader();

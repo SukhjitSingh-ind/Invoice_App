@@ -51,7 +51,17 @@ import {
 } from '../utils/jsonInvoiceParser.js';
 import { calculateInvoiceTotals } from '../utils/invoiceCalculations.js';
 import { useToast } from '../components/Toast.jsx';
-import { ROUTES, STORAGE_KEYS, DEFAULT_LOCALE } from '../constants/index.js';
+import {
+    ROUTES,
+    STORAGE_KEYS,
+    DEFAULT_LOCALE,
+    DEFAULT_INITIAL_INVOICE_NUMBER,
+    PAGINATION,
+    DEFAULT_GST_RATE,
+    DEFAULT_DISCOUNT_LABEL,
+    MONEY_DECIMAL_PRECISION,
+    TOAST_TYPES
+} from '../constants/index.js';
 
 export default function CreateInvoiceFromJson() {
     const navigate = useNavigate();
@@ -67,7 +77,7 @@ export default function CreateInvoiceFromJson() {
     const clients = useMemo(() => liveClients || [], [liveClients]);
     const [selectedClientId, setSelectedClientId] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
+    const [currentPage, setCurrentPage] = useState(PAGINATION.DEFAULT_PAGE);
 
     // Add Client Modal state
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -81,7 +91,7 @@ export default function CreateInvoiceFromJson() {
 
     // Active company profile & settings
     const activeProfile = useMemo(() => getActiveProfile(), []);
-    const [nextInvoiceNumber, setNextInvoiceNumber] = useState('1');
+    const [nextInvoiceNumber, setNextInvoiceNumber] = useState(DEFAULT_INITIAL_INVOICE_NUMBER);
 
     useEffect(() => {
         getNextInvoiceNumber().then(num => setNextInvoiceNumber(num));
@@ -152,13 +162,13 @@ export default function CreateInvoiceFromJson() {
     const handleLoadSample = () => {
         const sample = getSampleInvoiceJson();
         setJsonInput(sample);
-        addToast('Sample invoice JSON loaded!', 'success');
+        addToast('Sample invoice JSON loaded!', TOAST_TYPES.SUCCESS);
     };
 
     const handleClearJson = () => {
         setJsonInput('');
         setManualIsGST(null);
-        addToast('JSON editor cleared.', 'info');
+        addToast('JSON editor cleared.', TOAST_TYPES.INFO);
     };
 
     const handleFormatJson = () => {
@@ -166,9 +176,9 @@ export default function CreateInvoiceFromJson() {
         try {
             const parsed = JSON.parse(jsonInput);
             setJsonInput(JSON.stringify(parsed, null, 2));
-            addToast('JSON formatted with clean indentation.', 'success');
+            addToast('JSON formatted with clean indentation.', TOAST_TYPES.SUCCESS);
         } catch {
-            addToast('Cannot format invalid JSON. Please fix syntax errors first.', 'error');
+            addToast('Cannot format invalid JSON. Please fix syntax errors first.', TOAST_TYPES.ERROR);
         }
     };
 
@@ -177,7 +187,7 @@ export default function CreateInvoiceFromJson() {
         navigator.clipboard.writeText(jsonInput).then(() => {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
-            addToast('JSON copied to clipboard!', 'success');
+            addToast('JSON copied to clipboard!', TOAST_TYPES.SUCCESS);
         });
     };
 
@@ -186,7 +196,7 @@ export default function CreateInvoiceFromJson() {
         if (!file) return;
 
         if (!file.name.toLowerCase().endsWith('.json')) {
-            addToast('Please select a valid .json file.', 'error');
+            addToast('Please select a valid .json file.', TOAST_TYPES.ERROR);
             return;
         }
 
@@ -195,11 +205,11 @@ export default function CreateInvoiceFromJson() {
             const content = event.target?.result;
             if (typeof content === 'string') {
                 setJsonInput(content);
-                addToast(`Loaded ${file.name} successfully!`, 'success');
+                addToast(`Loaded ${file.name} successfully!`, TOAST_TYPES.SUCCESS);
             }
         };
         reader.onerror = () => {
-            addToast('Failed to read the selected file.', 'error');
+            addToast('Failed to read the selected file.', TOAST_TYPES.ERROR);
         };
         reader.readAsText(file);
 
@@ -211,62 +221,62 @@ export default function CreateInvoiceFromJson() {
         const strId = clientId.toString();
         if (selectedClientId === strId) {
             setSelectedClientId('');
-            addToast('Client selection cleared.', 'info');
+            addToast('Client selection cleared.', TOAST_TYPES.INFO);
         } else {
             setSelectedClientId(strId);
-            addToast('Client selected (takes precedence over JSON).', 'success');
+            addToast('Client selected (takes precedence over JSON).', TOAST_TYPES.SUCCESS);
         }
     };
 
     const handleSelectTemplate = (templateId) => {
         if (manualTemplateId === templateId) {
             setManualTemplateId('');
-            addToast('Manual template selection cleared. Reverted to JSON/default.', 'info');
+            addToast('Manual template selection cleared. Reverted to JSON/default.', TOAST_TYPES.INFO);
         } else {
             setManualTemplateId(templateId);
-            addToast(`Template "${getTemplateById(templateId).name}" selected.`, 'success');
+            addToast(`Template "${getTemplateById(templateId).name}" selected.`, TOAST_TYPES.SUCCESS);
         }
     };
 
     const handleSaveClientModal = async () => {
         const settings = getSettings();
         if (!clientFormData.name.trim()) {
-            addToast('Client Name is required!', 'error');
+            addToast('Client Name is required!', TOAST_TYPES.ERROR);
             return;
         }
 
         if (settings.validation.requireClientMobile && !clientFormData.mobile.trim()) {
-            addToast('Mobile Number is required (as per Settings)!', 'error');
+            addToast('Mobile Number is required (as per Settings)!', TOAST_TYPES.ERROR);
             return;
         }
 
         if (clientFormData.mobile && !validatePhone(clientFormData.mobile)) {
-            addToast('Please enter a valid mobile number.', 'error');
+            addToast('Please enter a valid mobile number.', TOAST_TYPES.ERROR);
             return;
         }
 
         if (clientFormData.email && !validateEmail(clientFormData.email)) {
-            addToast('Please enter a valid email address.', 'error');
+            addToast('Please enter a valid email address.', TOAST_TYPES.ERROR);
             return;
         }
 
         if (clientFormData.gstNumber && !validateGST(clientFormData.gstNumber)) {
-            addToast('Invalid GST Number format!', 'error');
+            addToast('Invalid GST Number format!', TOAST_TYPES.ERROR);
             return;
         }
 
         const saved = await saveClient(clientFormData);
         setSelectedClientId(saved.id.toString());
         setSearchQuery('');
-        setCurrentPage(1);
+        setCurrentPage(PAGINATION.DEFAULT_PAGE);
         setIsClientModalOpen(false);
         setClientFormData(createEmptyClient());
-        addToast(`Client "${saved.name}" created and selected!`, 'success');
+        addToast(`Client "${saved.name}" created and selected!`, TOAST_TYPES.SUCCESS);
     };
 
     const handleProceedToEditor = () => {
         if (jsonInput.trim() && !parseResult.success) {
-            addToast('Please fix JSON syntax errors before proceeding.', 'error');
+            addToast('Please fix JSON syntax errors before proceeding.', TOAST_TYPES.ERROR);
             return;
         }
 
@@ -286,7 +296,7 @@ export default function CreateInvoiceFromJson() {
             }
         });
 
-        addToast('Invoice populated from JSON! You can now review and edit.', 'success');
+        addToast('Invoice populated from JSON! You can now review and edit.', TOAST_TYPES.SUCCESS);
     };
 
     return (
@@ -294,7 +304,7 @@ export default function CreateInvoiceFromJson() {
             {/* Top Breadcrumb & Navigation */}
             <div className="mb-8">
                 <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">
-                    <Link to="/invoices" className="hover:underline">Invoices</Link>
+                    <Link to={ROUTES.INVOICES} className="hover:underline">Invoices</Link>
                     <span>•</span>
                     <span>Import JSON Workflow</span>
                 </div>
@@ -313,7 +323,7 @@ export default function CreateInvoiceFromJson() {
 
                     <div className="flex items-center gap-2">
                         <Link
-                            to="/create"
+                            to={ROUTES.CREATE_INVOICE}
                             className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-semibold text-sm rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
                         >
                             <span>Standard Creation</span>
@@ -917,7 +927,7 @@ export default function CreateInvoiceFromJson() {
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Grand Total</span>
                         <div className="flex items-center gap-2 text-base font-black text-slate-900">
                             <DollarSign size={16} className="text-emerald-600" />
-                            <span>₹{invoiceTotals.total.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}</span>
+                            <span>₹{invoiceTotals.total.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}</span>
                         </div>
                     </div>
                 </div>
@@ -956,7 +966,7 @@ export default function CreateInvoiceFromJson() {
                                             <td className="py-2 px-3 text-center text-slate-700">{item.quantity}</td>
                                             <td className="py-2 px-3 text-right text-slate-700">₹{item.price.toLocaleString(DEFAULT_LOCALE)}</td>
                                             {resolvedData.invoice.IsGST && (
-                                                <td className="py-2 px-3 text-center text-slate-500">{item.gstRate ?? 18}%</td>
+                                                <td className="py-2 px-3 text-center text-slate-500">{item.gstRate ?? DEFAULT_GST_RATE}%</td>
                                             )}
                                             <td className="py-2 px-3 text-right font-bold text-slate-900">
                                                 ₹{(item.quantity * item.price).toLocaleString(DEFAULT_LOCALE)}
@@ -970,7 +980,7 @@ export default function CreateInvoiceFromJson() {
                                             Subtotal:
                                         </td>
                                         <td className="py-2 px-3 text-right text-slate-800">
-                                            ₹{invoiceTotals.subtotal.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                                            ₹{invoiceTotals.subtotal.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                         </td>
                                     </tr>
                                     {resolvedData.invoice.IsGST && (
@@ -979,17 +989,17 @@ export default function CreateInvoiceFromJson() {
                                                 {resolvedData.invoice.IsIGST ? 'IGST' : 'CGST + SGST'}:
                                             </td>
                                             <td className="py-1 px-3 text-right text-slate-700 text-[11px]">
-                                                ₹{invoiceTotals.taxAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })}
+                                                ₹{invoiceTotals.taxAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                             </td>
                                         </tr>
                                     )}
                                     {invoiceTotals.discountAmount > 0 && (
                                         <tr>
                                             <td colSpan={resolvedData.invoice.IsGST ? 6 : 4} className="py-1 px-3 text-right text-emerald-600 text-[11px]">
-                                                {resolvedData.invoice.discountLabel || 'Discount'}:
+                                                {resolvedData.invoice.discountLabel || DEFAULT_DISCOUNT_LABEL}:
                                             </td>
                                             <td className="py-1 px-3 text-right text-emerald-600 text-[11px]">
-                                                -₹{invoiceTotals.discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                -₹{invoiceTotals.discountAmount.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                             </td>
                                         </tr>
                                     )}
@@ -998,7 +1008,7 @@ export default function CreateInvoiceFromJson() {
                                             Grand Total:
                                         </td>
                                         <td className="py-2.5 px-3 text-right font-black text-slate-900 text-base">
-                                            ₹{invoiceTotals.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            ₹{invoiceTotals.total.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: MONEY_DECIMAL_PRECISION })}
                                         </td>
                                     </tr>
                                 </tfoot>

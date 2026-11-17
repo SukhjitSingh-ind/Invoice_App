@@ -7,7 +7,9 @@ import { calculateInvoiceTotals } from '../utils/invoiceCalculations.js';
 import { getActiveProfile } from '../services/settingsService.js';
 import {
     ROUTES,
+    getEditInvoiceRoute,
     PAGINATION,
+    PAYMENT_STATUS,
     DEFAULT_CURRENCY_CODE,
     DEFAULT_LOCALE
 } from '../constants/index.js';
@@ -155,7 +157,7 @@ export default function Dashboard() {
                                                 </span>
                                             ) : (
                                                 <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">
-                                                    Fully Paid
+                                                    {PAYMENT_STATUS.FULLY_PAID}
                                                 </span>
                                             )}
                                         </td>
@@ -201,7 +203,7 @@ export default function Dashboard() {
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {recentInvoices.map(inv => (
-                                    <tr key={inv.id} onClick={() => navigate(`/edit/${inv.id}`)} className="cursor-pointer hover:bg-slate-50 transition-colors">
+                                    <tr key={inv.id} onClick={() => navigate(getEditInvoiceRoute(inv.id))} className="cursor-pointer hover:bg-slate-50 transition-colors">
                                         <td className="p-4 font-bold text-slate-800">{inv.number}</td>
                                         <td className="p-4 font-medium text-slate-600">{inv.recipient.name}</td>
                                         <td className="p-4 text-sm text-slate-500">{inv.date}</td>

@@ -44,3 +44,15 @@ export const ROUTES = Object.freeze({
     SETTINGS: '/settings',
     YOUR_DETAILS: '/your-details',
 });
+
+export const getEditInvoiceRoute = (id) => `/edit/${id}`;
+export const getPreviewInvoiceRoute = (id) => `/preview/${id}`;
+
+export const TOAST_TYPES = Object.freeze({
+    SUCCESS: 'success',
+    ERROR: 'error',
+    WARNING: 'warning',
+    INFO: 'info',
+});
+
+export const DEFAULT_TOAST_DURATION = 3000;

@@ -7,6 +7,8 @@ import { deleteInvoice, saveInvoice } from '../services/invoiceService.js';
 import { getInvoiceTotal, calculateInvoiceTotals, isInvoicePaid } from '../utils/invoiceCalculations.js';
 import {
     ROUTES,
+    getEditInvoiceRoute,
+    getPreviewInvoiceRoute,
     PAYMENT_STATUS,
     DEFAULT_CURRENCY_CODE,
     DEFAULT_LOCALE
@@ -150,7 +152,7 @@ export default function Invoices() {
                         return (
                             <div
                                 key={inv.id}
-                                onClick={() => navigate(`/edit/${inv.id}`)}
+                                onClick={() => navigate(getEditInvoiceRoute(inv.id))}
                                 className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-all cursor-pointer group relative"
                             >
                                 <div className="flex justify-between items-start mb-3">
@@ -191,7 +193,7 @@ export default function Invoices() {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 e.preventDefault();
-                                                navigate(`/preview/${inv.id}`);
+                                                navigate(getPreviewInvoiceRoute(inv.id));
                                             }}
                                             className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                             title="Print / Preview"
