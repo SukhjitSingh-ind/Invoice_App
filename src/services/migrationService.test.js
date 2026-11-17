@@ -3,12 +3,7 @@ import { db } from '../db/db.js';
 import { STORAGE_KEYS } from '../constants/index.js';
 import {
     initializeDatabaseAndMigrate,
-    transformInvoiceForDexie,
-    MIGRATION_MARKER,
-    LEGACY_INVOICE_KEY,
-    LEGACY_CLIENT_KEY,
-    LEGACY_ITEM_KEY,
-    LEGACY_SETTINGS_KEY
+    transformInvoiceForDexie
 } from './migrationService.js';
 import { saveInvoice, getInvoice, deleteInvoice } from './invoiceService.js';
 import { getAllClientsAsync } from './clientService.js';
@@ -153,9 +148,9 @@ async function runAllTests() {
         { id: 1, name: 'Consulting', defaultPrice: 500, hsnSac: '9983' }
     ];
 
-    localStorage.setItem(LEGACY_INVOICE_KEY, JSON.stringify(legacyInvoices));
-    localStorage.setItem(LEGACY_CLIENT_KEY, JSON.stringify(legacyClients));
-    localStorage.setItem(LEGACY_ITEM_KEY, JSON.stringify(legacyItems));
+    localStorage.setItem(STORAGE_KEYS.LEGACY_INVOICE_KEY, JSON.stringify(legacyInvoices));
+    localStorage.setItem(STORAGE_KEYS.LEGACY_CLIENT_KEY, JSON.stringify(legacyClients));
+    localStorage.setItem(STORAGE_KEYS.LEGACY_ITEM_KEY, JSON.stringify(legacyItems));
 
     // Execute migration
     const migResult = await initializeDatabaseAndMigrate();
@@ -178,7 +173,7 @@ async function runAllTests() {
     assert(inv2.isGST === undefined, 'Dexie inv2 has no legacy isGST property');
 
     // Verify localStorage markers & backups
-    assert(localStorage.getItem(MIGRATION_MARKER) === 'true', 'Migration marker set in localStorage');
+    assert(localStorage.getItem(STORAGE_KEYS.MIGRATION_MARKER) === 'true', 'Migration marker set in localStorage');
     assert(localStorage.getItem(STORAGE_KEYS.BACKUP_PRE_DEXIE) !== null, 'Pre-dexie backup stored safely in localStorage');
 
     // ==========================================

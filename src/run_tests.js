@@ -5,6 +5,7 @@ import { spawn } from 'child_process';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const testFiles = [
+    './constants/constants.test.js',
     './utils/invoiceCalculations.test.js',
     './utils/numberToWords.test.js',
     './utils/validation.test.js',

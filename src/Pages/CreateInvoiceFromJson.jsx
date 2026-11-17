@@ -41,8 +41,7 @@ import {
     getInitials,
     getClientAvatarStyle,
     paginateClients,
-    getPageNumbers,
-    CLIENTS_PER_PAGE
+    getPageNumbers
 } from '../utils/clientHelpers.js';
 import {
     parseAndValidateInvoiceJson,
@@ -57,6 +56,7 @@ import {
     DEFAULT_LOCALE,
     DEFAULT_INITIAL_INVOICE_NUMBER,
     PAGINATION,
+    CLIENTS_PER_PAGE,
     DEFAULT_GST_RATE,
     DEFAULT_DISCOUNT_LABEL,
     MONEY_DECIMAL_PRECISION,

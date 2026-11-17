@@ -12,8 +12,6 @@ export const AVATAR_COLOR_PALETTES = [
     'bg-amber-100 text-amber-800 border-amber-200',
 ];
 
-export { CLIENTS_PER_PAGE };
-
 /**
  * Deterministically derives an avatar color palette based on client name and ID
  */

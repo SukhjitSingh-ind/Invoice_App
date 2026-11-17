@@ -16,13 +16,6 @@ export const PAYMENT_STATUS = Object.freeze({
     FULLY_PAID: 'Fully Paid',
 });
 
-export const CURRENCY = Object.freeze({
-    INR: 'INR',
-    SYMBOL_INR: '₹',
-});
-
-export const SUPPORTED_CURRENCIES = Object.freeze(['INR']);
-
 export const DEFAULT_CURRENCY = '₹';
 export const DEFAULT_CURRENCY_CODE = 'INR';
 export const DEFAULT_LOCALE = 'en-IN';
