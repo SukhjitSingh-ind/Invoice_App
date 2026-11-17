@@ -43,3 +43,15 @@ export const DEFAULT_ITEM_UNIT = 'Pcs';
 export const DEFAULT_TEMPLATE = 'default';
 
 export const MAX_IMAGE_SIZE_BYTES = 500000;
+
+export const MONEY_DECIMAL_PRECISION = 2;
+export const PERCENTAGE_FACTOR = 100;
+export const TAX_SPLIT_DIVISOR = 2;
+export const PAISE_PER_RUPEE = 100;
+
+export const REPORT_TYPES = Object.freeze({
+    ALL: 'all',
+    ITEMS: 'items',
+    CLIENTS: 'clients',
+    SUMMARY: 'summary',
+});

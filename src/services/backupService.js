@@ -4,7 +4,13 @@ import { loadInvoicesFromDb } from './invoiceService.js';
 import { loadClientsFromDb } from './clientService.js';
 import { loadItemsFromDb } from './itemService.js';
 import { loadSettingsFromDb } from './settingsService.js';
-import { STORAGE_KEYS } from '../constants/index.js';
+import {
+    STORAGE_KEYS,
+    CURRENT_BACKUP_VERSION,
+    MIME_TYPES,
+    DEXIE_TRANSACTION_MODE,
+    DEFAULT_PROFILE_ID
+} from '../constants/index.js';
 
 /**
  * Export a single JSON file containing invoices, clients, items, companies and settings from Dexie.
@@ -20,7 +26,7 @@ export async function exportFullBackup() {
 
         const backup = {
             type: STORAGE_KEYS.FULL_BACKUP_TYPE,
-            version: 2,
+            version: CURRENT_BACKUP_VERSION,
             exportedAt: new Date().toISOString(),
             data: {
                 invoices,
@@ -32,7 +38,7 @@ export async function exportFullBackup() {
         };
 
         const json = JSON.stringify(backup, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
+        const blob = new Blob([json], { type: MIME_TYPES.JSON });
         const url = URL.createObjectURL(blob);
 
         const link = document.createElement('a');
@@ -103,7 +109,7 @@ export async function importFullBackup(jsonData) {
         }
 
         // Apply data atomically
-        await db.transaction('rw', [db.invoices, db.clients, db.items, db.companies, db.settings], async () => {
+        await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, [db.invoices, db.clients, db.items, db.companies, db.settings], async () => {
             await db.invoices.clear();
             await db.clients.clear();
             await db.items.clear();
@@ -121,7 +127,7 @@ export async function importFullBackup(jsonData) {
                         validation: settings.validation,
                         display: settings.display,
                         payment: settings.payment,
-                        activeProfileId: settings.activeProfileId || safeCompanies[0]?.id || 'default'
+                        activeProfileId: settings.activeProfileId || safeCompanies[0]?.id || DEFAULT_PROFILE_ID
                     }
                 });
             }

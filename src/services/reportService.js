@@ -2,6 +2,9 @@ import { getAllInvoices } from './invoiceService.js';
 import {
     DEFAULT_GST_RATE,
     DISCOUNT_TYPES,
+    PERCENTAGE_FACTOR,
+    REPORT_TYPES,
+    MIME_TYPES,
     PAGINATION
 } from '../constants/index.js';
 
@@ -24,7 +27,7 @@ const calculateItemTotal = (item, IsGST) => {
     const baseTotal = (item.quantity || 0) * (item.price || 0);
     if (IsGST) {
         const gstRate = item.gstRate !== undefined ? item.gstRate : DEFAULT_GST_RATE;
-        return baseTotal * (1 + gstRate / 100);
+        return baseTotal * (1 + gstRate / PERCENTAGE_FACTOR);
     }
     return baseTotal;
 };
@@ -135,7 +138,7 @@ export const getClientPurchaseReport = () => {
 
         const discountValue = parseFloat(invoice.discountValue || 0);
         const discountAmount = invoice.discountType === DISCOUNT_TYPES.PERCENTAGE
-            ? (invoiceTotal * discountValue / 100)
+            ? (invoiceTotal * discountValue / PERCENTAGE_FACTOR)
             : discountValue;
 
         clientStats.totalSpent += Math.max(0, invoiceTotal - discountAmount);
@@ -205,7 +208,7 @@ export const getSummaryStats = () => {
         // Apply discount
         const discountValue = parseFloat(invoice.discountValue || 0);
         const discountAmount = invoice.discountType === DISCOUNT_TYPES.PERCENTAGE
-            ? (invoiceTotal * discountValue / 100)
+            ? (invoiceTotal * discountValue / PERCENTAGE_FACTOR)
             : discountValue;
 
         totalRevenue += Math.max(0, invoiceTotal - discountAmount);
@@ -235,20 +238,20 @@ export const getItemPerformanceMetrics = (itemName) => {
  * Export report data to JSON
  * @param {string} reportType - Type of report ('items', 'clients', 'summary')
  */
-export const exportReportToJSON = (reportType = 'all') => {
+export const exportReportToJSON = (reportType = REPORT_TYPES.ALL) => {
     let data;
     let filename;
 
     switch (reportType) {
-        case 'items':
+        case REPORT_TYPES.ITEMS:
             data = getItemSalesReport();
             filename = 'item_sales_report';
             break;
-        case 'clients':
+        case REPORT_TYPES.CLIENTS:
             data = getClientPurchaseReport();
             filename = 'client_purchase_report';
             break;
-        case 'summary':
+        case REPORT_TYPES.SUMMARY:
             data = getSummaryStats();
             filename = 'summary_report';
             break;
@@ -262,7 +265,7 @@ export const exportReportToJSON = (reportType = 'all') => {
     }
 
     const jsonString = JSON.stringify(data, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
+    const blob = new Blob([jsonString], { type: MIME_TYPES.JSON });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement('a');

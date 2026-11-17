@@ -26,3 +26,15 @@ export const STORAGE_KEYS = Object.freeze({
     APP_CONFIG: 'app_config',
     FULL_BACKUP_TYPE: 'invoice_app_full_backup',
 });
+
+export const MIME_TYPES = Object.freeze({
+    JSON: 'application/json',
+});
+
+export const DEXIE_TRANSACTION_MODE = Object.freeze({
+    READ_ONLY: 'r',
+    READ_WRITE: 'rw',
+});
+
+export const CURRENT_SCHEMA_VERSION = '2';
+export const CURRENT_BACKUP_VERSION = 2;

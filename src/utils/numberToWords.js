@@ -1,3 +1,5 @@
+import { PAISE_PER_RUPEE } from '../constants/index.js';
+
 // Convert number to words (Indian numbering system)
 export const numberToWords = (num) => {
     if (num === 0) return 'Zero';
@@ -17,7 +19,7 @@ export const numberToWords = (num) => {
     };
 
     const rupees = Math.floor(num);
-    const paise = Math.round((num - rupees) * 100);
+    const paise = Math.round((num - rupees) * PAISE_PER_RUPEE);
 
     let words = convert(rupees) + ' Rupees';
     if (paise > 0) {

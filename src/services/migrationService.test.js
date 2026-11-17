@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { db } from '../db/db.js';
+import { STORAGE_KEYS } from '../constants/index.js';
 import {
     initializeDatabaseAndMigrate,
     transformInvoiceForDexie,
@@ -178,7 +179,7 @@ async function runAllTests() {
 
     // Verify localStorage markers & backups
     assert(localStorage.getItem(MIGRATION_MARKER) === 'true', 'Migration marker set in localStorage');
-    assert(localStorage.getItem('invoice_app_data_backup_pre_dexie') !== null, 'Pre-dexie backup stored safely in localStorage');
+    assert(localStorage.getItem(STORAGE_KEYS.BACKUP_PRE_DEXIE) !== null, 'Pre-dexie backup stored safely in localStorage');
 
     // ==========================================
     // 3. IDEMPOTENCE & DUPLICATE PREVENTION
