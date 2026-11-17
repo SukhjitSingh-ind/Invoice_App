@@ -213,7 +213,16 @@ The application persists all structured business data in **IndexedDB** using **D
 - **`clients`**: Customer directory indexed by `id`, `name`, `mobile`, `email`, `gstNumber`, and `createdAt`.
 - **`items`**: Catalog items indexed by `id`, `name`, `hsnSac`, `defaultPrice`, and `createdAt`.
 - **`companies`**: Multi-company profiles indexed by `id`, `name`, `gstNumber`, and `isDefault`.
-- **`settings`**: Configuration key-value store indexed by `key`.
+- **`settings`**: Configuration key-value store indexed by `key`, storing validation gates, display preferences, UPI payment defaults, and `selectedTemplateId`.
+- **`templates`**: Complete HTML/CSS invoice templates indexed by `++id`, `name`, `isDefault`, `isBuiltIn`, and `updatedAt` (Dexie Version 2).
+
+### Built-in Templates & Seeding
+The application ships with three built-in templates automatically seeded into IndexedDB:
+- **Classic**: Traditional formal invoice layout with serif typography and bordered tables (`isDefault: true`).
+- **Modern**: Contemporary layout with sans-serif typography, gradient accent bar, and metadata cards.
+- **Minimal**: High-efficiency, print-optimized monochromatic layout with clean whitespace.
+
+Seeding runs idempotently inside an atomic Dexie transaction during application initialization without overwriting user customizations or existing records.
 
 ### Automatic Startup Migration
 When the application loads, `AppBootstrap` runs `initializeDatabaseAndMigrate()`:

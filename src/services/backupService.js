@@ -4,6 +4,7 @@ import { loadInvoicesFromDb } from './invoiceService.js';
 import { loadClientsFromDb } from './clientService.js';
 import { loadItemsFromDb } from './itemService.js';
 import { loadSettingsFromDb } from './settingsService.js';
+import { resolveValidTemplateId, seedBuiltInTemplates } from './templateService.js';
 import {
     STORAGE_KEYS,
     CURRENT_BACKUP_VERSION,
@@ -13,7 +14,7 @@ import {
 } from '../constants/index.js';
 
 /**
- * Export a single JSON file containing invoices, clients, items, companies and settings from Dexie.
+ * Export a single JSON file containing invoices, clients, items, companies, settings, and templates from Dexie.
  * @returns {Promise<{ success: boolean, message?: string }>}
  */
 export async function exportFullBackup() {
@@ -22,6 +23,7 @@ export async function exportFullBackup() {
         const clients = await db.clients.toArray();
         const items = await db.items.toArray();
         const companies = await db.companies.toArray();
+        const templates = await db.templates.toArray();
         const configRecord = await db.settings.get(STORAGE_KEYS.APP_CONFIG);
 
         const backup = {
@@ -33,25 +35,29 @@ export async function exportFullBackup() {
                 clients,
                 items,
                 companies,
-                settings: configRecord?.value || null
+                settings: configRecord?.value || null,
+                templates
             }
         };
 
         const json = JSON.stringify(backup, null, 2);
-        const blob = new Blob([json], { type: MIME_TYPES.JSON });
-        const url = URL.createObjectURL(blob);
 
-        const link = document.createElement('a');
-        link.href = url;
-        const dateStr = new Date().toISOString().split('T')[0];
-        link.download = `invoice_app_full_backup_${dateStr}.json`;
+        if (typeof document !== 'undefined' && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+            const blob = new Blob([json], { type: MIME_TYPES.JSON });
+            const url = URL.createObjectURL(blob);
 
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+            const link = document.createElement('a');
+            link.href = url;
+            const dateStr = new Date().toISOString().split('T')[0];
+            link.download = `invoice_app_full_backup_${dateStr}.json`;
 
-        return { success: true };
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        return { success: true, backup };
     } catch (error) {
         console.error('Error exporting full backup:', error);
         return { success: false, message: error.message };
@@ -60,7 +66,9 @@ export async function exportFullBackup() {
 
 /**
  * Import a full JSON backup and restore into Dexie.js.
- * Enforces canonical GST contract on all imported invoices.
+ * Restores templates and preserves or safely falls back for selectedTemplateId.
+ * Backward compatible with legacy backups lacking a templates collection.
+ *
  * @param {string} jsonData
  * @returns {Promise<{ success: boolean, counts?: object, message?: string }>}
  */
@@ -80,7 +88,7 @@ export async function importFullBackup(jsonData) {
             throw new Error('Invalid backup file: missing data section');
         }
 
-        const { invoices, clients, items, settings, companies } = parsed.data;
+        const { invoices, clients, items, settings, companies, templates } = parsed.data;
 
         if (!Array.isArray(invoices)) {
             throw new Error('Invalid backup file: invoices must be an array');
@@ -92,7 +100,6 @@ export async function importFullBackup(jsonData) {
             throw new Error('Invalid backup file: items must be an array');
         }
 
-        // Clean & standardize invoices
         const safeInvoices = invoices
             .filter((inv) => inv && (inv.id != null) && typeof inv.number === 'string')
             .map((inv) => transformInvoiceForDexie(inv));
@@ -100,7 +107,6 @@ export async function importFullBackup(jsonData) {
         const safeClients = clients.filter((c) => c && typeof c.name === 'string');
         const safeItems = items.filter((it) => it && typeof it.name === 'string');
 
-        // Extract companies (either from dedicated array or legacy settings.companyProfiles)
         let safeCompanies = [];
         if (Array.isArray(companies)) {
             safeCompanies = companies.filter(c => c && typeof c.name === 'string');
@@ -108,32 +114,55 @@ export async function importFullBackup(jsonData) {
             safeCompanies = settings.companyProfiles;
         }
 
-        // Apply data atomically
-        await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, [db.invoices, db.clients, db.items, db.companies, db.settings], async () => {
-            await db.invoices.clear();
-            await db.clients.clear();
-            await db.items.clear();
-            await db.companies.clear();
+        let safeTemplates = null;
+        if (Array.isArray(templates)) {
+            safeTemplates = templates.filter(t => t && typeof t.name === 'string');
+        }
 
-            if (safeInvoices.length > 0) await db.invoices.bulkPut(safeInvoices);
-            if (safeClients.length > 0) await db.clients.bulkPut(safeClients);
-            if (safeItems.length > 0) await db.items.bulkPut(safeItems);
-            if (safeCompanies.length > 0) await db.companies.bulkPut(safeCompanies);
+        await db.transaction(
+            DEXIE_TRANSACTION_MODE.READ_WRITE,
+            [db.invoices, db.clients, db.items, db.companies, db.templates, db.settings],
+            async () => {
+                await db.invoices.clear();
+                await db.clients.clear();
+                await db.items.clear();
+                await db.companies.clear();
 
-            if (settings && typeof settings === 'object') {
-                await db.settings.put({
-                    key: STORAGE_KEYS.APP_CONFIG,
-                    value: {
-                        validation: settings.validation,
-                        display: settings.display,
-                        payment: settings.payment,
-                        activeProfileId: settings.activeProfileId || safeCompanies[0]?.id || DEFAULT_PROFILE_ID
+                if (safeInvoices.length > 0) await db.invoices.bulkPut(safeInvoices);
+                if (safeClients.length > 0) await db.clients.bulkPut(safeClients);
+                if (safeItems.length > 0) await db.items.bulkPut(safeItems);
+                if (safeCompanies.length > 0) await db.companies.bulkPut(safeCompanies);
+
+                if (safeTemplates !== null) {
+                    await db.templates.clear();
+                    if (safeTemplates.length > 0) {
+                        await db.templates.bulkPut(safeTemplates);
                     }
-                });
-            }
-        });
+                }
 
-        // Hydrate all memory caches
+                const candidateTemplateId = settings?.selectedTemplateId ?? null;
+                const restoredSelectedTemplateId = await resolveValidTemplateId(candidateTemplateId, db);
+
+                if (settings && typeof settings === 'object') {
+                    await db.settings.put({
+                        key: STORAGE_KEYS.APP_CONFIG,
+                        value: {
+                            validation: settings.validation,
+                            display: settings.display,
+                            payment: settings.payment,
+                            activeProfileId: settings.activeProfileId || safeCompanies[0]?.id || DEFAULT_PROFILE_ID,
+                            selectedTemplateId: restoredSelectedTemplateId
+                        }
+                    });
+                }
+            }
+        );
+
+        const currentTemplateCount = await db.templates.count();
+        if (currentTemplateCount === 0) {
+            await seedBuiltInTemplates(db);
+        }
+
         await Promise.all([
             loadInvoicesFromDb(),
             loadClientsFromDb(),
@@ -141,12 +170,15 @@ export async function importFullBackup(jsonData) {
             loadSettingsFromDb()
         ]);
 
+        const finalTemplateCount = await db.templates.count();
+
         return {
             success: true,
             counts: {
                 invoices: safeInvoices.length,
                 clients: safeClients.length,
-                items: safeItems.length
+                items: safeItems.length,
+                templates: finalTemplateCount
             }
         };
     } catch (error) {

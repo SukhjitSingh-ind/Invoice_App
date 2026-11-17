@@ -38,4 +38,5 @@ export interface AppSettings {
   payment: PaymentSettings;
   companyProfiles: CompanyProfile[];
   activeProfileId: string;
+  selectedTemplateId?: number | string | null;
 }

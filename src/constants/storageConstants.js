@@ -11,6 +11,7 @@ export const TABLE_NAMES = Object.freeze({
     ITEMS: 'items',
     COMPANIES: 'companies',
     SETTINGS: 'settings',
+    TEMPLATES: 'templates',
 });
 
 export const STORAGE_KEYS = Object.freeze({

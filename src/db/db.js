@@ -1,5 +1,5 @@
 import Dexie from 'dexie';
-import { DATABASE_NAME, TABLE_NAMES } from '../constants/index.js';
+import { DATABASE_NAME, TABLE_NAMES, TEMPLATE_SCHEMA } from '../constants/index.js';
 
 export class InvoiceAppDatabase extends Dexie {
     constructor() {
@@ -11,6 +11,10 @@ export class InvoiceAppDatabase extends Dexie {
             [TABLE_NAMES.ITEMS]: 'id, name, hsnSac, defaultPrice, createdAt',
             [TABLE_NAMES.COMPANIES]: 'id, name, gstNumber, isDefault',
             [TABLE_NAMES.SETTINGS]: 'key'
+        });
+
+        this.version(2).stores({
+            [TABLE_NAMES.TEMPLATES]: TEMPLATE_SCHEMA
         });
     }
 }

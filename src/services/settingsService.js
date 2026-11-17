@@ -1,5 +1,6 @@
 import { db } from '../db/db.js';
 import { DEFAULT_INITIAL_SETTINGS } from './migrationService.js';
+import { getDefaultTemplate, resolveValidTemplateId } from './templateService.js';
 import {
     STORAGE_KEYS,
     DEFAULT_PROFILE_ID,
@@ -10,7 +11,7 @@ let cachedSettings = null;
 
 /**
  * Hydrates settings cache from Dexie.
- * Merges app_config with companies table.
+ * Merges app_config with companies table and persists repaired template selections.
  * @returns {Promise<object>}
  */
 export const loadSettingsFromDb = async () => {
@@ -22,12 +23,21 @@ export const loadSettingsFromDb = async () => {
         const profileList = companies.length > 0 ? companies : DEFAULT_INITIAL_SETTINGS.companyProfiles;
         const activeId = config.activeProfileId || profileList[0]?.id || DEFAULT_PROFILE_ID;
 
+        const candidateId = config.selectedTemplateId ?? null;
+        const selectedTemplateId = await resolveValidTemplateId(candidateId, db);
+
+        if (configRecord && configRecord.value && configRecord.value.selectedTemplateId !== selectedTemplateId) {
+            configRecord.value.selectedTemplateId = selectedTemplateId;
+            await db.settings.put(configRecord);
+        }
+
         cachedSettings = {
             validation: { ...DEFAULT_INITIAL_SETTINGS.validation, ...(config.validation || {}) },
             display: { ...DEFAULT_INITIAL_SETTINGS.display, ...(config.display || {}) },
             payment: { ...DEFAULT_INITIAL_SETTINGS.payment, ...(config.payment || {}) },
             companyProfiles: profileList,
-            activeProfileId: activeId
+            activeProfileId: activeId,
+            selectedTemplateId: selectedTemplateId
         };
         return cachedSettings;
     } catch (error) {
@@ -68,7 +78,10 @@ export const updateSettings = async (newSettings) => {
             validation: { ...current.validation, ...(newSettings.validation || {}) },
             display: { ...current.display, ...(newSettings.display || {}) },
             payment: { ...current.payment, ...(newSettings.payment || {}) },
-            activeProfileId: newSettings.activeProfileId || current.activeProfileId
+            activeProfileId: newSettings.activeProfileId || current.activeProfileId,
+            selectedTemplateId: newSettings.selectedTemplateId !== undefined
+                ? newSettings.selectedTemplateId
+                : (current.selectedTemplateId ?? null)
         };
 
         await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, [db.settings, db.companies], async () => {
@@ -78,7 +91,8 @@ export const updateSettings = async (newSettings) => {
                     validation: merged.validation,
                     display: merged.display,
                     payment: merged.payment,
-                    activeProfileId: merged.activeProfileId
+                    activeProfileId: merged.activeProfileId,
+                    selectedTemplateId: merged.selectedTemplateId
                 }
             });
 
@@ -103,6 +117,8 @@ export const updateSettings = async (newSettings) => {
  */
 export const resetSettings = async () => {
     try {
+        const defaultTemplateId = await resolveValidTemplateId(null, db);
+
         await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, [db.settings, db.companies], async () => {
             await db.settings.put({
                 key: STORAGE_KEYS.APP_CONFIG,
@@ -110,14 +126,18 @@ export const resetSettings = async () => {
                     validation: DEFAULT_INITIAL_SETTINGS.validation,
                     display: DEFAULT_INITIAL_SETTINGS.display,
                     payment: DEFAULT_INITIAL_SETTINGS.payment,
-                    activeProfileId: DEFAULT_INITIAL_SETTINGS.activeProfileId
+                    activeProfileId: DEFAULT_INITIAL_SETTINGS.activeProfileId,
+                    selectedTemplateId: defaultTemplateId
                 }
             });
             await db.companies.clear();
             await db.companies.bulkPut(DEFAULT_INITIAL_SETTINGS.companyProfiles);
         });
 
-        cachedSettings = { ...DEFAULT_INITIAL_SETTINGS };
+        cachedSettings = {
+            ...DEFAULT_INITIAL_SETTINGS,
+            selectedTemplateId: defaultTemplateId
+        };
         return cachedSettings;
     } catch (error) {
         console.error('Error resetting settings:', error);
@@ -190,4 +210,42 @@ export const setActiveProfile = async (id) => {
     }
     await loadSettingsFromDb();
     return true;
+};
+
+// --- Template Settings Helpers ---
+
+export const getSelectedTemplateId = () => {
+    const settings = getSettings();
+    return settings.selectedTemplateId ?? null;
+};
+
+export const setSelectedTemplateId = async (id) => {
+    let configRecord = await db.settings.get(STORAGE_KEYS.APP_CONFIG);
+    if (!configRecord) {
+        configRecord = {
+            key: STORAGE_KEYS.APP_CONFIG,
+            value: {
+                ...DEFAULT_INITIAL_SETTINGS,
+                selectedTemplateId: id
+            }
+        };
+    } else {
+        configRecord.value = {
+            ...(configRecord.value || {}),
+            selectedTemplateId: id
+        };
+    }
+    await db.settings.put(configRecord);
+    await loadSettingsFromDb();
+    return true;
+};
+
+export const getSelectedTemplateAsync = async () => {
+    await loadSettingsFromDb();
+    const currentId = getSelectedTemplateId();
+    if (currentId != null && db.templates) {
+        const found = await db.templates.get(currentId);
+        if (found) return found;
+    }
+    return await getDefaultTemplate(db);
 };

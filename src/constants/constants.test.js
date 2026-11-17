@@ -112,6 +112,23 @@ assert(constants.TABLE_NAMES.CLIENTS === 'clients', 'TABLE_NAMES.CLIENTS is "cli
 assert(constants.TABLE_NAMES.ITEMS === 'items', 'TABLE_NAMES.ITEMS is "items"');
 assert(constants.TABLE_NAMES.COMPANIES === 'companies', 'TABLE_NAMES.COMPANIES is "companies"');
 assert(constants.TABLE_NAMES.SETTINGS === 'settings', 'TABLE_NAMES.SETTINGS is "settings"');
+assert(constants.TABLE_NAMES.TEMPLATES === 'templates', 'TABLE_NAMES.TEMPLATES is "templates"');
+
+// TEMPLATE CONSTANTS
+assert(typeof constants.BUILT_IN_TEMPLATE_NAMES === 'object' && constants.BUILT_IN_TEMPLATE_NAMES !== null, 'BUILT_IN_TEMPLATE_NAMES object exists');
+assert(Object.isFrozen(constants.BUILT_IN_TEMPLATE_NAMES), 'BUILT_IN_TEMPLATE_NAMES is immutable (Object.isFrozen)');
+assert(constants.BUILT_IN_TEMPLATE_NAMES.CLASSIC === 'Classic', 'BUILT_IN_TEMPLATE_NAMES.CLASSIC is "Classic"');
+assert(constants.BUILT_IN_TEMPLATE_NAMES.MODERN === 'Modern', 'BUILT_IN_TEMPLATE_NAMES.MODERN is "Modern"');
+assert(constants.BUILT_IN_TEMPLATE_NAMES.MINIMAL === 'Minimal', 'BUILT_IN_TEMPLATE_NAMES.MINIMAL is "Minimal"');
+
+assert(typeof constants.BUILT_IN_TEMPLATE_KEYS === 'object' && constants.BUILT_IN_TEMPLATE_KEYS !== null, 'BUILT_IN_TEMPLATE_KEYS object exists');
+assert(Object.isFrozen(constants.BUILT_IN_TEMPLATE_KEYS), 'BUILT_IN_TEMPLATE_KEYS is immutable (Object.isFrozen)');
+assert(constants.BUILT_IN_TEMPLATE_KEYS.CLASSIC === 'classic', 'BUILT_IN_TEMPLATE_KEYS.CLASSIC is "classic"');
+assert(constants.BUILT_IN_TEMPLATE_KEYS.MODERN === 'modern', 'BUILT_IN_TEMPLATE_KEYS.MODERN is "modern"');
+assert(constants.BUILT_IN_TEMPLATE_KEYS.MINIMAL === 'minimal', 'BUILT_IN_TEMPLATE_KEYS.MINIMAL is "minimal"');
+
+assert(constants.DEFAULT_BUILT_IN_TEMPLATE_NAME === 'Classic', 'DEFAULT_BUILT_IN_TEMPLATE_NAME is "Classic"');
+assert(constants.TEMPLATE_SCHEMA === '++id, name, isDefault, isBuiltIn, updatedAt', 'TEMPLATE_SCHEMA is correct');
 
 assert(typeof constants.STORAGE_KEYS === 'object' && constants.STORAGE_KEYS !== null, 'STORAGE_KEYS object exists');
 assert(Object.isFrozen(constants.STORAGE_KEYS), 'STORAGE_KEYS is immutable (Object.isFrozen)');
