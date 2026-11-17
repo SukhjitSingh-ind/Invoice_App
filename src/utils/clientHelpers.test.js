@@ -3,9 +3,9 @@ import {
     getClientAvatarStyle,
     filterClients,
     paginateClients,
-    getPageNumbers,
-    CLIENTS_PER_PAGE
+    getPageNumbers
 } from './clientHelpers.js';
+import { CLIENTS_PER_PAGE } from '../constants/index.js';
 
 console.log('Running Client Helper Tests...');
 

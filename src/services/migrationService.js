@@ -11,13 +11,6 @@ import {
     CURRENT_SCHEMA_VERSION
 } from '../constants/index.js';
 
-export const MIGRATION_MARKER = STORAGE_KEYS.MIGRATION_MARKER;
-export const MIGRATION_LOCK = STORAGE_KEYS.MIGRATION_LOCK;
-export const LEGACY_INVOICE_KEY = STORAGE_KEYS.LEGACY_INVOICE_KEY;
-export const LEGACY_CLIENT_KEY = STORAGE_KEYS.LEGACY_CLIENT_KEY;
-export const LEGACY_ITEM_KEY = STORAGE_KEYS.LEGACY_ITEM_KEY;
-export const LEGACY_SETTINGS_KEY = STORAGE_KEYS.LEGACY_SETTINGS_KEY;
-
 export const DEFAULT_INITIAL_INVOICES = [
     {
         id: 1731427200000,
@@ -170,7 +163,7 @@ function safeGetLocalStorage(key) {
  */
 export async function initializeDatabaseAndMigrate() {
     try {
-        const isMigrated = typeof localStorage !== 'undefined' && localStorage.getItem(MIGRATION_MARKER) === 'true';
+        const isMigrated = typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEYS.MIGRATION_MARKER) === 'true';
 
         if (isMigrated) {
             // Already migrated. Ensure database has seed data if completely fresh
@@ -183,14 +176,14 @@ export async function initializeDatabaseAndMigrate() {
 
         // Set lock
         if (typeof localStorage !== 'undefined') {
-            localStorage.setItem(MIGRATION_LOCK, Date.now().toString());
+            localStorage.setItem(STORAGE_KEYS.MIGRATION_LOCK, Date.now().toString());
         }
 
         // 1. Read existing localStorage data
-        const rawInvoices = safeGetLocalStorage(LEGACY_INVOICE_KEY);
-        const rawClients = safeGetLocalStorage(LEGACY_CLIENT_KEY);
-        const rawItems = safeGetLocalStorage(LEGACY_ITEM_KEY);
-        const rawSettings = safeGetLocalStorage(LEGACY_SETTINGS_KEY);
+        const rawInvoices = safeGetLocalStorage(STORAGE_KEYS.LEGACY_INVOICE_KEY);
+        const rawClients = safeGetLocalStorage(STORAGE_KEYS.LEGACY_CLIENT_KEY);
+        const rawItems = safeGetLocalStorage(STORAGE_KEYS.LEGACY_ITEM_KEY);
+        const rawSettings = safeGetLocalStorage(STORAGE_KEYS.LEGACY_SETTINGS_KEY);
 
         // 2. Transform Invoices with strict GST contract
         let invoicesToInsert = [];
@@ -256,13 +249,13 @@ export async function initializeDatabaseAndMigrate() {
 
         // 8. Safely backup legacy localStorage and mark completed
         if (typeof localStorage !== 'undefined') {
-            const rawInvoicesStr = localStorage.getItem(LEGACY_INVOICE_KEY);
+            const rawInvoicesStr = localStorage.getItem(STORAGE_KEYS.LEGACY_INVOICE_KEY);
             if (rawInvoicesStr) {
                 localStorage.setItem(STORAGE_KEYS.BACKUP_PRE_DEXIE, rawInvoicesStr);
             }
-            localStorage.setItem(MIGRATION_MARKER, 'true');
+            localStorage.setItem(STORAGE_KEYS.MIGRATION_MARKER, 'true');
             localStorage.setItem(STORAGE_KEYS.SCHEMA_VERSION, CURRENT_SCHEMA_VERSION);
-            localStorage.removeItem(MIGRATION_LOCK);
+            localStorage.removeItem(STORAGE_KEYS.MIGRATION_LOCK);
         }
 
         return {
@@ -274,7 +267,7 @@ export async function initializeDatabaseAndMigrate() {
     } catch (error) {
         console.error('Fatal error during Dexie migration:', error);
         if (typeof localStorage !== 'undefined') {
-            localStorage.removeItem(MIGRATION_LOCK);
+            localStorage.removeItem(STORAGE_KEYS.MIGRATION_LOCK);
         }
         throw error;
     }

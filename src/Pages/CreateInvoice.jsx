@@ -30,11 +30,10 @@ import {
     getInitials,
     getClientAvatarStyle,
     paginateClients,
-    getPageNumbers,
-    CLIENTS_PER_PAGE
+    getPageNumbers
 } from '../utils/clientHelpers';
 import { useToast } from '../components/Toast';
-import { ROUTES, PAGINATION, APP_DEFAULTS, TOAST_TYPES } from '../constants/index.js';
+import { ROUTES, PAGINATION, APP_DEFAULTS, TOAST_TYPES, CLIENTS_PER_PAGE } from '../constants/index.js';
 
 export default function CreateInvoice() {
     const navigate = useNavigate();
