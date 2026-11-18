@@ -256,3 +256,6 @@ export async function deleteTemplateAsync(id, dbInstance = db) {
     }
     return true;
 }
+
+export { renderInvoiceTemplate } from '../utils/templates.js';
+
