@@ -1,9 +1,9 @@
 import Dexie from 'dexie';
-import { DATABASE_NAME, TABLE_NAMES } from '../constants/index.js';
+import { DATABASE_NAME, TABLE_NAMES, TEMPLATE_SCHEMA } from '../constants/index.js';
 
 export class InvoiceAppDatabase extends Dexie {
-    constructor() {
-        super(DATABASE_NAME);
+    constructor(dbName = DATABASE_NAME) {
+        super(dbName);
 
         this.version(1).stores({
             [TABLE_NAMES.INVOICES]: 'id, number, date, IsGST, IsIGST, template, recipient.name, recipient.gstNumber',
@@ -11,6 +11,10 @@ export class InvoiceAppDatabase extends Dexie {
             [TABLE_NAMES.ITEMS]: 'id, name, hsnSac, defaultPrice, createdAt',
             [TABLE_NAMES.COMPANIES]: 'id, name, gstNumber, isDefault',
             [TABLE_NAMES.SETTINGS]: 'key'
+        });
+
+        this.version(2).stores({
+            [TABLE_NAMES.TEMPLATES]: TEMPLATE_SCHEMA
         });
     }
 }

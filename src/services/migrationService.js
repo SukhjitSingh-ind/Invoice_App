@@ -1,5 +1,6 @@
 import { db } from '../db/db.js';
 import { generateUniqueInvoiceId } from '../utils/idGenerator.js';
+import { seedBuiltInTemplates, getDefaultTemplate } from './templateService.js';
 import {
     STORAGE_KEYS,
     DEFAULT_CURRENCY,
@@ -79,8 +80,31 @@ export const DEFAULT_INITIAL_SETTINGS = {
             isDefault: true
         }
     ],
-    activeProfileId: DEFAULT_PROFILE_ID
+    activeProfileId: DEFAULT_PROFILE_ID,
+    selectedTemplateId: null
 };
+
+/**
+ * Constructs an app_config record for IndexedDB settings table.
+ * Merges optional custom settings with default initial settings.
+ *
+ * @param {object|null} [customSettings=null]
+ * @param {number|string|null} [defaultTemplateId=null]
+ * @returns {{ key: string, value: object }}
+ */
+export function createAppSettingsRecord(customSettings = null, defaultTemplateId = null) {
+    const source = customSettings && typeof customSettings === 'object' ? customSettings : {};
+    return {
+        key: STORAGE_KEYS.APP_CONFIG,
+        value: {
+            validation: { ...DEFAULT_INITIAL_SETTINGS.validation, ...(source.validation || {}) },
+            display: { ...DEFAULT_INITIAL_SETTINGS.display, ...(source.display || {}) },
+            payment: { ...DEFAULT_INITIAL_SETTINGS.payment, ...(source.payment || {}) },
+            activeProfileId: source.activeProfileId || DEFAULT_PROFILE_ID,
+            selectedTemplateId: source.selectedTemplateId || defaultTemplateId || null
+        }
+    };
+}
 
 /**
  * Transforms a raw legacy invoice into a canonical record for Dexie.js:
@@ -163,6 +187,13 @@ function safeGetLocalStorage(key) {
  */
 export async function initializeDatabaseAndMigrate() {
     try {
+        if (!db.isOpen()) {
+            await db.open();
+        }
+
+        // Ensure built-in templates are seeded idempotently in Dexie v2
+        await seedBuiltInTemplates(db);
+
         const isMigrated = typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEYS.MIGRATION_MARKER) === 'true';
 
         if (isMigrated) {
@@ -214,15 +245,8 @@ export async function initializeDatabaseAndMigrate() {
             isDefault: p.id === (settingsSource.activeProfileId || DEFAULT_PROFILE_ID)
         }));
 
-        const appSettingsRecord = {
-            key: STORAGE_KEYS.APP_CONFIG,
-            value: {
-                validation: { ...DEFAULT_INITIAL_SETTINGS.validation, ...settingsSource.validation },
-                display: { ...DEFAULT_INITIAL_SETTINGS.display, ...settingsSource.display },
-                payment: { ...DEFAULT_INITIAL_SETTINGS.payment, ...settingsSource.payment },
-                activeProfileId: settingsSource.activeProfileId || DEFAULT_PROFILE_ID
-            }
-        };
+        const defTpl = await getDefaultTemplate(db);
+        const appSettingsRecord = createAppSettingsRecord(settingsSource, defTpl?.id);
 
         // 6. Execute Atomic Transaction in Dexie
         await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, [db.invoices, db.clients, db.items, db.companies, db.settings], async () => {
@@ -277,17 +301,12 @@ export async function initializeDatabaseAndMigrate() {
  * Seeds initial data for brand-new users with zero prior storage
  */
 async function seedInitialData() {
+    const defTpl = await getDefaultTemplate(db);
+    const appSettingsRecord = createAppSettingsRecord(null, defTpl?.id);
+
     await db.transaction(DEXIE_TRANSACTION_MODE.READ_WRITE, [db.invoices, db.companies, db.settings], async () => {
         await db.invoices.bulkPut(DEFAULT_INITIAL_INVOICES.map(inv => transformInvoiceForDexie(inv)));
         await db.companies.bulkPut(DEFAULT_INITIAL_SETTINGS.companyProfiles.map(p => ({ ...p, isDefault: true })));
-        await db.settings.put({
-            key: STORAGE_KEYS.APP_CONFIG,
-            value: {
-                validation: DEFAULT_INITIAL_SETTINGS.validation,
-                display: DEFAULT_INITIAL_SETTINGS.display,
-                payment: DEFAULT_INITIAL_SETTINGS.payment,
-                activeProfileId: DEFAULT_INITIAL_SETTINGS.activeProfileId
-            }
-        });
+        await db.settings.put(appSettingsRecord);
     });
 }

@@ -155,19 +155,23 @@ sequenceDiagram
 The database is managed through the `InvoiceAppDatabase` class in `src/db/db.js`, subclassing `Dexie`.
 
 - **Database Name**: `InvoiceAppDB`
-- **Current Version**: `1`
+- **Current Version**: `2`
 
 ```javascript
 export class InvoiceAppDatabase extends Dexie {
     constructor() {
-        super('InvoiceAppDB');
+        super(DATABASE_NAME);
 
         this.version(1).stores({
-            invoices: 'id, number, date, IsGST, IsIGST, template, recipient.name, recipient.gstNumber',
-            clients: 'id, name, mobile, email, gstNumber, createdAt',
-            items: 'id, name, hsnSac, defaultPrice, createdAt',
-            companies: 'id, name, gstNumber, isDefault',
-            settings: 'key'
+            [TABLE_NAMES.INVOICES]: 'id, number, date, IsGST, IsIGST, template, recipient.name, recipient.gstNumber',
+            [TABLE_NAMES.CLIENTS]: 'id, name, mobile, email, gstNumber, createdAt',
+            [TABLE_NAMES.ITEMS]: 'id, name, hsnSac, defaultPrice, createdAt',
+            [TABLE_NAMES.COMPANIES]: 'id, name, gstNumber, isDefault',
+            [TABLE_NAMES.SETTINGS]: 'key'
+        });
+
+        this.version(2).stores({
+            [TABLE_NAMES.TEMPLATES]: TEMPLATE_SCHEMA
         });
     }
 }
@@ -362,8 +366,40 @@ export const db = new InvoiceAppDatabase();
       "upiId": "acme@oksbi",
       "payeeName": "Acme Industrial Solutions"
     },
-    "activeProfileId": "default"
+    "activeProfileId": "default",
+    "selectedTemplateId": 1
   }
+}
+```
+
+---
+
+### 4.6. Table: `templates`
+
+- **Purpose**: Master store for reusable invoice layout templates (HTML markup, CSS stylesheets, dynamic tokens).
+- **Primary Key**: `id` (Auto-increment integer `++id`).
+- **Indexes**:
+  - `name`: Template display name (e.g. `'Classic'`, `'Modern'`, `'Minimal'`).
+  - `isDefault`: Boolean indicator for whether the template is marked as the default layout.
+  - `isBuiltIn`: Boolean distinguishing system templates (`true`) from user-created templates (`false`).
+  - `updatedAt`: Date timestamp of last modification.
+- **Dynamic Tokens Supported**: `{{sender.*}}`, `{{recipient.*}}`, `{{invoice.*}}`, `{{#items}}...{{/items}}`, `{{totals.*}}`, `{{bankDetails.*}}`, `{{paymentInfo}}`, `{{notes}}`, `{{termsAndConditions}}`.
+- **Built-in Templates Seeded**:
+  - `Classic` (`isDefault: true`): Traditional, formal invoice presentation with serif typography and bordered tables.
+  - `Modern` (`isDefault: false`): Contemporary layout with sans-serif typography, brand color accent bar, and card-based hierarchy.
+  - `Minimal` (`isDefault: false`): Monochromatic, print-optimized layout with hairline dividers and generous whitespace.
+
+#### Representative Record:
+```json
+{
+  "id": 1,
+  "name": "Classic",
+  "key": "classic",
+  "isDefault": true,
+  "isBuiltIn": true,
+  "html": "<div class=\"invoice-container classic-layout\">...</div>",
+  "css": ".classic-layout { font-family: 'Georgia', serif; ... }",
+  "updatedAt": "2026-11-17T10:00:00.000Z"
 }
 ```
 
@@ -374,26 +410,30 @@ export const db = new InvoiceAppDatabase();
 Dexie provides declarative schema versioning. When altering tables or adding indexes in future releases, **never** modify past versions or drop databases. Add a new version block:
 
 ```javascript
-// Example: Future v2 migration
+// Example: Future v3 migration pattern
 export class InvoiceAppDatabase extends Dexie {
     constructor() {
-        super('InvoiceAppDB');
+        super(DATABASE_NAME);
 
         // Version 1 (Baseline)
         this.version(1).stores({
-            invoices: 'id, number, date, IsGST, IsIGST, template, recipient.name, recipient.gstNumber',
-            clients: 'id, name, mobile, email, gstNumber, createdAt',
-            items: 'id, name, hsnSac, defaultPrice, createdAt',
-            companies: 'id, name, gstNumber, isDefault',
-            settings: 'key'
+            [TABLE_NAMES.INVOICES]: 'id, number, date, IsGST, IsIGST, template, recipient.name, recipient.gstNumber',
+            [TABLE_NAMES.CLIENTS]: 'id, name, mobile, email, gstNumber, createdAt',
+            [TABLE_NAMES.ITEMS]: 'id, name, hsnSac, defaultPrice, createdAt',
+            [TABLE_NAMES.COMPANIES]: 'id, name, gstNumber, isDefault',
+            [TABLE_NAMES.SETTINGS]: 'key'
         });
 
-        // Version 2 (Adding tags index to invoices and audit log table)
+        // Version 2 (Templates store)
         this.version(2).stores({
-            invoices: 'id, number, date, IsGST, IsIGST, template, recipient.name, recipient.gstNumber, *tags',
+            [TABLE_NAMES.TEMPLATES]: TEMPLATE_SCHEMA
+        });
+
+        // Version 3 (Example: Adding tags index to invoices and audit log table)
+        this.version(3).stores({
+            [TABLE_NAMES.INVOICES]: 'id, number, date, IsGST, IsIGST, template, recipient.name, recipient.gstNumber, *tags',
             audit_logs: 'id, entityType, entityId, timestamp'
         }).upgrade(async (tx) => {
-            // Data transformations during upgrade
             await tx.invoices.toCollection().modify((invoice) => {
                 if (!invoice.tags) invoice.tags = [];
             });
