@@ -2,8 +2,8 @@ import Dexie from 'dexie';
 import { DATABASE_NAME, TABLE_NAMES, TEMPLATE_SCHEMA } from '../constants/index.js';
 
 export class InvoiceAppDatabase extends Dexie {
-    constructor() {
-        super(DATABASE_NAME);
+    constructor(dbName = DATABASE_NAME) {
+        super(dbName);
 
         this.version(1).stores({
             [TABLE_NAMES.INVOICES]: 'id, number, date, IsGST, IsIGST, template, recipient.name, recipient.gstNumber',
