@@ -129,6 +129,7 @@ assert(constants.BUILT_IN_TEMPLATE_KEYS.MINIMAL === 'minimal', 'BUILT_IN_TEMPLAT
 
 assert(constants.DEFAULT_BUILT_IN_TEMPLATE_NAME === 'Classic', 'DEFAULT_BUILT_IN_TEMPLATE_NAME is "Classic"');
 assert(constants.TEMPLATE_SCHEMA === '++id, name, isDefault, isBuiltIn, updatedAt', 'TEMPLATE_SCHEMA is correct');
+assert(constants.MAX_TEMPLATE_FILE_SIZE_BYTES === 2097152, 'MAX_TEMPLATE_FILE_SIZE_BYTES is 2 MB (2097152 bytes)');
 
 assert(typeof constants.STORAGE_KEYS === 'object' && constants.STORAGE_KEYS !== null, 'STORAGE_KEYS object exists');
 assert(Object.isFrozen(constants.STORAGE_KEYS), 'STORAGE_KEYS is immutable (Object.isFrozen)');

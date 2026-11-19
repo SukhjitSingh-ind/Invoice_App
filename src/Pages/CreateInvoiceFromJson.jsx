@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db.js';
-import { TEMPLATES, getTemplateById } from '../utils/templates.js';
+import { TEMPLATES, getTemplateById, formatCustomTemplateForPicker } from '../utils/templates.js';
 import { saveClient, createEmptyClient } from '../services/clientService.js';
 import { getSettings, getActiveProfile } from '../services/settingsService.js';
 import { getNextInvoiceNumber } from '../services/invoiceService.js';
@@ -86,6 +86,13 @@ export default function CreateInvoiceFromJson() {
     // Template manual override state (null or empty string means not manually overridden)
     const [manualTemplateId, setManualTemplateId] = useState('');
 
+    const liveTemplates = useLiveQuery(() => db.templates.toArray(), []);
+    const customTemplates = useMemo(() => (liveTemplates || []).filter(t => !t.isBuiltIn), [liveTemplates]);
+    const allSelectableTemplates = useMemo(() => {
+        const custom = customTemplates.map(formatCustomTemplateForPicker).filter(Boolean);
+        return [...custom, ...TEMPLATES];
+    }, [customTemplates]);
+
     // GST manual override state (null = use JSON/default; boolean = explicit user toggle)
     const [manualIsGST, setManualIsGST] = useState(null);
 
@@ -128,9 +135,10 @@ export default function CreateInvoiceFromJson() {
             manualIsGST,
             defaultTemplateId: 'default',
             senderProfile: activeProfile,
-            nextInvoiceNumberFallback: nextInvoiceNumber
+            nextInvoiceNumberFallback: nextInvoiceNumber,
+            availableTemplates: allSelectableTemplates
         });
-    }, [parseResult.extractedInvoice, manualClient, manualTemplateId, manualIsGST, activeProfile, nextInvoiceNumber]);
+    }, [parseResult.extractedInvoice, manualClient, manualTemplateId, manualIsGST, activeProfile, nextInvoiceNumber, allSelectableTemplates]);
 
     // 4. Calculate Live Totals for Summary Preview
     const invoiceTotals = useMemo(() => {
@@ -234,7 +242,8 @@ export default function CreateInvoiceFromJson() {
             addToast('Manual template selection cleared. Reverted to JSON/default.', TOAST_TYPES.INFO);
         } else {
             setManualTemplateId(templateId);
-            addToast(`Template "${getTemplateById(templateId).name}" selected.`, TOAST_TYPES.SUCCESS);
+            const templateObj = allSelectableTemplates.find(t => String(t.id) === String(templateId)) || getTemplateById(templateId, allSelectableTemplates);
+            addToast(`Template "${templateObj.name}" selected.`, TOAST_TYPES.SUCCESS);
         }
     };
 
@@ -801,7 +810,7 @@ export default function CreateInvoiceFromJson() {
 
                 {/* Templates Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mt-5">
-                    {TEMPLATES.map((tmpl) => {
+                    {allSelectableTemplates.map((tmpl) => {
                         const isSelected = resolvedData.invoice.template === tmpl.id;
                         const isManuallyPicked = manualTemplateId === tmpl.id;
 

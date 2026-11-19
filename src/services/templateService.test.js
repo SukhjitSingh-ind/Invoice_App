@@ -804,6 +804,196 @@ async function runTests() {
 
     await v2IntegrationAppDb.close();
 
+    // =========================================================================
+    // 14. DELETION POLICY WHEN REFERENCED BY INVOICES (Finding 2)
+    // =========================================================================
+    console.log('\n--- 14. Testing Deletion Policy When Referenced by Invoices (Finding 2) ---');
+
+    const invDelDbName = 'TestInvDelDB_' + Date.now();
+    const invDelDb = new Dexie(invDelDbName);
+    invDelDb.version(1).stores({
+        [TABLE_NAMES.TEMPLATES]: TEMPLATE_SCHEMA,
+        [TABLE_NAMES.INVOICES]: 'id, number, template',
+        [TABLE_NAMES.SETTINGS]: 'key'
+    });
+    await invDelDb.open();
+
+    const usedTplId = await saveTemplateAsync({ name: 'Active Layout', html: '<div>Active</div>', isDefault: false }, invDelDb);
+    const fallbackTplId = await saveTemplateAsync({ name: 'Fallback Layout', html: '<div>Fallback</div>', isDefault: true }, invDelDb);
+
+    // Create 2 invoices referencing usedTplId (one numeric, one string)
+    await invDelDb.invoices.put({ id: 'inv-1', number: 'INV-001', template: usedTplId });
+    await invDelDb.invoices.put({ id: 'inv-2', number: 'INV-002', template: String(usedTplId) });
+
+    // Attempting to delete should fail and be prevented
+    let threwInUse = false;
+    try {
+        await deleteTemplateAsync(usedTplId, invDelDb);
+    } catch (err) {
+        threwInUse = true;
+        assert(err.message.includes('currently referenced by 2 invoice(s)'), 'Rejection error states invoice reference count');
+    }
+    assert(threwInUse, 'deleteTemplateAsync prevents deletion when referenced by invoices');
+
+    // Verify template was NOT deleted
+    const stillExists = await invDelDb.templates.get(usedTplId);
+    assert(stillExists !== undefined, 'Template record was preserved in Dexie');
+
+    // Deletion with reassignInvoicesTo atomically reassigns invoices and deletes template
+    const reassignResult = await deleteTemplateAsync(usedTplId, invDelDb, { reassignInvoicesTo: fallbackTplId });
+    assert(reassignResult === true, 'deleteTemplateAsync succeeds when reassignInvoicesTo option is provided');
+
+    const afterReassignDeleted = await invDelDb.templates.get(usedTplId);
+    assert(afterReassignDeleted === undefined, 'Target template is now deleted');
+
+    const updatedInv1 = await invDelDb.invoices.get('inv-1');
+    const updatedInv2 = await invDelDb.invoices.get('inv-2');
+    assert(updatedInv1.template === fallbackTplId, 'Invoice 1 reassigned to fallback template');
+    assert(updatedInv2.template === fallbackTplId, 'Invoice 2 reassigned to fallback template');
+
+    await invDelDb.close();
+
+    // =========================================================================
+    // 15. DELETION & DEFAULT REASSIGNMENT LIFECYCLE (Finding 4)
+    // =========================================================================
+    console.log('\n--- 15. Testing Deletion & Default Reassignment Lifecycle (Finding 4) ---');
+
+    const lifecycleDbName = 'TestLifecycleDB_' + Date.now();
+    const lDb = new Dexie(lifecycleDbName);
+    lDb.version(1).stores({
+        [TABLE_NAMES.TEMPLATES]: TEMPLATE_SCHEMA,
+        [TABLE_NAMES.SETTINGS]: 'key'
+    });
+    await lDb.open();
+
+    // Scenario A: Non-default deletion
+    const nonDefTpl = await saveTemplateAsync({ name: 'Secondary Theme', html: '<div>2</div>', isDefault: false }, lDb);
+    const defTpl = await saveTemplateAsync({ name: 'Primary Theme', html: '<div>1</div>', isDefault: true }, lDb);
+
+    await deleteTemplateAsync(nonDefTpl, lDb);
+    const defAfterNonDefDel = await lDb.templates.get(defTpl);
+    assert(defAfterNonDefDel.isDefault === true, 'Deleting non-default template leaves default unchanged');
+
+    // Scenario B: Deleting default when Classic is unavailable -> reassigns first remaining
+    await lDb.templates.clear();
+    const alphaId = await saveTemplateAsync({ name: 'Alpha Custom', html: '<div>A</div>', isDefault: true }, lDb);
+    const betaId = await saveTemplateAsync({ name: 'Beta Custom', html: '<div>B</div>', isDefault: false }, lDb);
+
+    await deleteTemplateAsync(alphaId, lDb);
+    const betaAfterAlphaDel = await lDb.templates.get(betaId);
+    assert(betaAfterAlphaDel.isDefault === true, 'Deleting default when Classic unavailable reassigns first remaining');
+
+    // Scenario C: Deleting the only remaining template
+    const onlyDelResult = await deleteTemplateAsync(betaId, lDb);
+    assert(onlyDelResult === true, 'Deleting only remaining template succeeds cleanly');
+    const remainingCount = await lDb.templates.count();
+    assert(remainingCount === 0, 'Templates store is empty without crash');
+
+    await lDb.close();
+
+    // =========================================================================
+    // 16. DUPLICATE NAME PERSISTENCE & CONCURRENCY (Finding 5)
+    // =========================================================================
+    console.log('\n--- 16. Testing Duplicate Name Persistence & Concurrency (Finding 5) ---');
+
+    const dupDbName = 'TestDupDB_' + Date.now();
+    const dupDb = new Dexie(dupDbName);
+    dupDb.version(1).stores({
+        [TABLE_NAMES.TEMPLATES]: TEMPLATE_SCHEMA
+    });
+    await dupDb.open();
+
+    await saveTemplateAsync({ name: 'Modern Minimal', html: '<div>1</div>' }, dupDb);
+
+    // Exact duplicate
+    let exactFailed = false;
+    try {
+        await saveTemplateAsync({ name: 'Modern Minimal', html: '<div>2</div>' }, dupDb);
+    } catch (err) {
+        exactFailed = true;
+        assert(err.message.includes('already exists'), 'saveTemplateAsync rejects exact duplicate name');
+    }
+    assert(exactFailed, 'Exact duplicate name threw error in saveTemplateAsync');
+
+    // Case-insensitive duplicate
+    let caseFailed = false;
+    try {
+        await saveTemplateAsync({ name: 'MODERN MINIMAL', html: '<div>3</div>' }, dupDb);
+    } catch (err) {
+        caseFailed = true;
+        assert(err.message.includes('already exists'), 'saveTemplateAsync rejects uppercase duplicate name');
+    }
+    assert(caseFailed, 'Case-insensitive duplicate name threw error in saveTemplateAsync');
+
+    // Whitespace variation
+    let wsFailed = false;
+    try {
+        await saveTemplateAsync({ name: '   Modern Minimal   ', html: '<div>4</div>' }, dupDb);
+    } catch (err) {
+        wsFailed = true;
+        assert(err.message.includes('already exists'), 'saveTemplateAsync rejects whitespace-padded duplicate name');
+    }
+    assert(wsFailed, 'Whitespace-padded duplicate name threw error in saveTemplateAsync');
+
+    // Concurrent saves with same name
+    let concurrentSuccesses = 0;
+    let concurrentFailures = 0;
+    const concurrentResults = await Promise.allSettled([
+        saveTemplateAsync({ name: 'Concurrent Test', html: '<div>C1</div>' }, dupDb),
+        saveTemplateAsync({ name: 'Concurrent Test', html: '<div>C2</div>' }, dupDb)
+    ]);
+    concurrentResults.forEach(r => {
+        if (r.status === 'fulfilled') concurrentSuccesses++;
+        if (r.status === 'rejected') concurrentFailures++;
+    });
+    assert(concurrentSuccesses === 1, 'Exactly one concurrent save with identical name succeeded');
+    assert(concurrentFailures === 1, 'Concurrent collision was rejected');
+
+    // Updating existing template with same name succeeds
+    const existingToUpdate = await dupDb.templates.where('name').equals('Modern Minimal').first();
+    const updateResult = await saveTemplateAsync({ id: existingToUpdate.id, name: 'Modern Minimal', html: '<div>Updated</div>' }, dupDb);
+    assert(updateResult === existingToUpdate.id, 'Self-update with same template name succeeds');
+
+    await dupDb.close();
+
+    // =========================================================================
+    // 17. SEEDING RECONCILIATION & METADATA PRESERVATION (Finding 7)
+    // =========================================================================
+    console.log('\n--- 17. Testing Seeding Reconciliation & Metadata Preservation (Finding 7) ---');
+
+    const seedRecDbName = 'TestSeedRecDB_' + Date.now();
+    const srDb = new Dexie(seedRecDbName);
+    srDb.version(1).stores({
+        [TABLE_NAMES.TEMPLATES]: TEMPLATE_SCHEMA,
+        [TABLE_NAMES.SETTINGS]: 'key'
+    });
+    await srDb.open();
+
+    // Insert legacy built-in record lacking key and isBuiltIn, with customized HTML
+    const customClassicHtml = '<div>User Customized Classic HTML</div>';
+    const legacyRecordId = await srDb.templates.add({
+        name: DEFAULT_BUILT_IN_TEMPLATE_NAME,
+        html: customClassicHtml,
+        css: '/* user css */',
+        isDefault: true,
+        updatedAt: new Date('2025-01-01')
+    });
+
+    const seedRecResult = await seedBuiltInTemplates(srDb);
+    assert(seedRecResult.existingCount >= 1, 'seedBuiltInTemplates recognized legacy existing template');
+
+    const reconciledRecord = await srDb.templates.get(legacyRecordId);
+    assert(reconciledRecord.key === 'classic', 'Reconciled missing key to "classic"');
+    assert(reconciledRecord.isBuiltIn === true, 'Reconciled missing isBuiltIn to true');
+    assert(reconciledRecord.html === customClassicHtml, 'User customized HTML was strictly preserved');
+    assert(reconciledRecord.css === '/* user css */', 'User customized CSS was strictly preserved');
+
+    // Run seedBuiltInTemplates again (idempotence verification)
+    const secondSeedResult = await seedBuiltInTemplates(srDb);
+    assert(secondSeedResult.seededCount === 0, 'Second run seeded 0 additional templates (idempotent)');
+
+    await srDb.close();
+
     console.log(`\nTests Completed: ${passed} Passed, ${failed} Failed`);
     if (failed > 0) process.exit(1);
 }

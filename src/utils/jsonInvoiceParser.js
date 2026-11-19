@@ -16,13 +16,27 @@ import {
 } from '../constants/index.js';
 
 /**
- * Validates whether a template ID exists in the application's supported templates.
- * @param {string} templateId
+ * Validates whether a template ID exists in the application's supported or custom templates.
+ * @param {string|number} templateId
+ * @param {Array<object>} [availableTemplates=null]
  * @returns {boolean}
  */
-export function isValidTemplateId(templateId) {
-    if (!templateId || typeof templateId !== 'string') return false;
-    return TEMPLATES.some((t) => t.id === templateId.trim());
+export function isValidTemplateId(templateId, availableTemplates = null) {
+    if (templateId === null || templateId === undefined) return false;
+    const strId = String(templateId).trim();
+    if (!strId) return false;
+
+    // Check built-in templates
+    if (TEMPLATES.some((t) => String(t.id) === strId || (t.key && String(t.key) === strId))) {
+        return true;
+    }
+
+    // Check custom / available templates if supplied
+    if (Array.isArray(availableTemplates) && availableTemplates.length > 0) {
+        return availableTemplates.some((t) => String(t.id) === strId || (t.key && String(t.key) === strId));
+    }
+
+    return false;
 }
 
 /**
@@ -374,7 +388,8 @@ export function resolveInvoiceData({
     defaultTemplateId = 'default',
     senderProfile = null,
     bankDetailsFallback = null,
-    nextInvoiceNumberFallback = ''
+    nextInvoiceNumberFallback = '',
+    availableTemplates = null
 }) {
     const data = extractedData || {};
 
@@ -415,10 +430,10 @@ export function resolveInvoiceData({
     let resolvedTemplate = defaultTemplateId || 'default';
     let templateSource = 'default';
 
-    if (manualTemplateId && isValidTemplateId(manualTemplateId)) {
+    if (manualTemplateId && isValidTemplateId(manualTemplateId, availableTemplates)) {
         resolvedTemplate = manualTemplateId;
         templateSource = 'manual';
-    } else if (data.template && isValidTemplateId(data.template)) {
+    } else if (data.template && isValidTemplateId(data.template, availableTemplates)) {
         resolvedTemplate = data.template;
         templateSource = 'json';
     } else {
@@ -426,7 +441,9 @@ export function resolveInvoiceData({
         templateSource = 'default';
     }
 
-    const templateMeta = TEMPLATES.find((t) => t.id === resolvedTemplate) || TEMPLATES[0];
+    const templateMeta = (Array.isArray(availableTemplates) ? availableTemplates : []).find(
+        (t) => String(t.id) === String(resolvedTemplate) || (t.key && String(t.key) === String(resolvedTemplate))
+    ) || TEMPLATES.find((t) => String(t.id) === String(resolvedTemplate)) || TEMPLATES[0];
 
     // --- SENDER / COMPANY PROFILE ---
     const resolvedSender = {

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Printer, ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Download, Home, FilePlus } from 'lucide-react';
 import { getInvoice } from '../services/invoiceService';
-import { getTemplateById } from '../utils/templates';
+import { getTemplateById, renderInvoiceTemplate } from '../utils/templates';
+import { getTemplateByIdAsync } from '../services/templateService';
 import { numberToWords } from '../utils/numberToWords';
 import { calculateInvoiceTotals } from '../utils/invoiceCalculations';
 import { getSettings } from '../services/settingsService';
@@ -98,6 +99,39 @@ export default function InvoicePreview() {
 
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [customTemplateRecord, setCustomTemplateRecord] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    Promise.resolve().then(async () => {
+      if (!invoice?.template) {
+        if (isMounted) setCustomTemplateRecord(null);
+        return;
+      }
+      try {
+        const tpl = await getTemplateByIdAsync(invoice.template);
+        if (isMounted) setCustomTemplateRecord(tpl);
+      } catch {
+        if (isMounted) setCustomTemplateRecord(null);
+      }
+    });
+    return () => { isMounted = false; };
+  }, [invoice?.template]);
+
+  const renderedCustomHtml = useMemo(() => {
+    if (customTemplateRecord && !customTemplateRecord.isBuiltIn && customTemplateRecord.html) {
+      try {
+        const fullHtml = customTemplateRecord.css
+          ? `<style>${customTemplateRecord.css}</style>${customTemplateRecord.html}`
+          : customTemplateRecord.html;
+        return renderInvoiceTemplate(fullHtml, invoice);
+      } catch (err) {
+        console.error('Error rendering custom invoice template:', err);
+        return null;
+      }
+    }
+    return null;
+  }, [customTemplateRecord, invoice]);
 
   useEffect(() => {
     let isMounted = true;
@@ -287,10 +321,17 @@ export default function InvoicePreview() {
           </div>
         </div>
 
-        <div
-          className={`print-container shadow-xl min-h-[1123px] w-full relative text-slate-900 font-sans ${paperClass}`}
-          style={customStyle}
-        >
+        {renderedCustomHtml ? (
+          <div
+            className="print-container shadow-xl min-h-[1123px] w-full relative bg-white p-6 sm:p-12 overflow-hidden"
+            style={customStyle}
+            dangerouslySetInnerHTML={{ __html: renderedCustomHtml }}
+          />
+        ) : (
+          <div
+            className={`print-container shadow-xl min-h-[1123px] w-full relative text-slate-900 font-sans ${paperClass}`}
+            style={customStyle}
+          >
 
           {isModern && (
             <div className={`w-full p-12 pb-8 ${theme.tableHeader} ${theme.headerStr} flex justify-between items-center`}>
@@ -577,6 +618,7 @@ export default function InvoicePreview() {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Download Success Modal */}

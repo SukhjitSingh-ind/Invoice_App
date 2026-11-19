@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
-import { Save, RotateCcw, CheckCircle2 } from 'lucide-react';
+import { Save, RotateCcw, CheckCircle2, Layout, Upload, Eye, Trash2, Check } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db.js';
 import { getSettings, updateSettings, resetSettings } from '../services/settingsService';
 import { exportInvoices, importInvoices } from '../services/invoiceService';
 import { exportClientsToJSON, importClientsFromJSON } from '../services/clientService';
 import { exportItemsToJSON, importItemsFromJSON } from '../services/itemService';
 import { exportFullBackup, importFullBackup } from '../services/backupService';
+import { setDefaultTemplateAsync, deleteTemplateAsync } from '../services/templateService';
+import UploadTemplateModal from '../components/TemplateManager/UploadTemplateModal';
+import TemplatePreviewModal from '../components/TemplateManager/TemplatePreviewModal';
 import { useToast } from '../components/Toast';
 import { DEFAULT_TOAST_DURATION, TOAST_TYPES } from '../constants/index.js';
 
@@ -12,6 +17,12 @@ export default function Settings() {
     const [settings, setSettings] = useState(() => getSettings());
     const [saved, setSaved] = useState(false);
     const { addToast } = useToast();
+
+    // Template Manager state
+    const liveTemplates = useLiveQuery(() => db.templates.toArray(), []);
+    const templates = liveTemplates || [];
+    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+    const [previewTemplate, setPreviewTemplate] = useState(null);
 
     if (!settings) return <div>Loading...</div>;
 
@@ -38,6 +49,26 @@ export default function Settings() {
             setSettings(defaults);
             setSaved(true);
             setTimeout(() => setSaved(false), DEFAULT_TOAST_DURATION);
+        }
+    };
+
+    const handleSetDefaultTemplate = async (templateId, templateName) => {
+        try {
+            await setDefaultTemplateAsync(templateId, db);
+            addToast(`"${templateName}" is now the default template.`, TOAST_TYPES.SUCCESS);
+        } catch (err) {
+            addToast(`Failed to set default template: ${err.message}`, TOAST_TYPES.ERROR);
+        }
+    };
+
+    const handleDeleteTemplate = async (templateId, templateName) => {
+        if (window.confirm(`Are you sure you want to delete the custom template "${templateName}"?`)) {
+            try {
+                await deleteTemplateAsync(templateId, db);
+                addToast(`Custom template "${templateName}" deleted successfully.`, TOAST_TYPES.SUCCESS);
+            } catch (err) {
+                addToast(`Failed to delete template: ${err.message}`, TOAST_TYPES.ERROR);
+            }
         }
     };
 
@@ -256,6 +287,120 @@ export default function Settings() {
 
                     </div>
 
+                    {/* Template Manager Section */}
+                    <div className="mt-8 bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                            <div>
+                                <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+                                    <div className="p-2 bg-indigo-100 rounded-lg">
+                                        <Layout className="w-6 h-6 text-indigo-600" />
+                                    </div>
+                                    Template Manager
+                                </h2>
+                                <p className="text-slate-600 text-sm mt-1">
+                                    Manage built-in and custom invoice templates, set defaults, or upload your own HTML templates.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsUploadModalOpen(true)}
+                                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer self-start sm:self-auto shrink-0"
+                            >
+                                <Upload size={16} />
+                                Upload Your Own Template
+                            </button>
+                        </div>
+
+                        {/* Templates List Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {templates.map((tpl) => {
+                                const isDefault = Boolean(tpl.isDefault);
+                                const isBuiltIn = Boolean(tpl.isBuiltIn);
+
+                                return (
+                                    <div
+                                        key={tpl.id}
+                                        className={`p-5 rounded-xl border transition-all flex flex-col justify-between ${
+                                            isDefault
+                                                ? 'border-2 border-blue-600 bg-blue-50/30 shadow-sm'
+                                                : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 hover:shadow-md'
+                                        }`}
+                                    >
+                                        <div>
+                                            <div className="flex items-start justify-between gap-2 mb-2">
+                                                <h3 className="font-bold text-base text-slate-900 truncate" title={tpl.name}>
+                                                    {tpl.name}
+                                                </h3>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    {isBuiltIn ? (
+                                                        <span className="px-2 py-0.5 text-[10px] font-semibold bg-slate-200 text-slate-700 rounded-full">
+                                                            Built-in
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2 py-0.5 text-[10px] font-bold bg-purple-100 text-purple-700 rounded-full border border-purple-200">
+                                                            Custom
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-2 text-xs text-slate-500 mb-4">
+                                                {isDefault ? (
+                                                    <span className="inline-flex items-center gap-1 font-bold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-md">
+                                                        <Check size={12} strokeWidth={3} />
+                                                        Active Default
+                                                    </span>
+                                                ) : (
+                                                    <span>Standard Layout</span>
+                                                )}
+                                                {tpl.updatedAt && (
+                                                    <span>• {new Date(tpl.updatedAt).toLocaleDateString()}</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Action Buttons */}
+                                        <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200/80">
+                                            <button
+                                                type="button"
+                                                onClick={() => setPreviewTemplate(tpl)}
+                                                className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                            >
+                                                <Eye size={13} />
+                                                Preview
+                                            </button>
+
+                                            <div className="flex items-center gap-1.5">
+                                                {!isDefault && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleSetDefaultTemplate(tpl.id, tpl.name)}
+                                                        className="px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer"
+                                                        title="Set as default template"
+                                                    >
+                                                        Set Default
+                                                    </button>
+                                                )}
+
+                                                {!isBuiltIn && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}
+                                                        className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                                        title="Delete custom template"
+                                                        aria-label={`Delete custom template ${tpl.name}`}
+                                                    >
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     {/* Data Management Section */}
                     <div className="mt-8 bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
                         <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-3">
@@ -417,6 +562,19 @@ export default function Settings() {
                     Fields that fail validation will be highlighted with a red border, and you won't be able to save until they're corrected.
                 </p>
             </div>
+
+            {/* Template Modals */}
+            <UploadTemplateModal
+                isOpen={isUploadModalOpen}
+                onClose={() => setIsUploadModalOpen(false)}
+                existingTemplates={templates}
+            />
+
+            <TemplatePreviewModal
+                isOpen={Boolean(previewTemplate)}
+                onClose={() => setPreviewTemplate(null)}
+                template={previewTemplate}
+            />
         </div>
     );
 }

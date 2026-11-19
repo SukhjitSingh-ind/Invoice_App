@@ -17,11 +17,15 @@ import {
     ChevronLeft,
     ChevronRight,
     AlertCircle,
-    FileCode2
+    FileCode2,
+    Upload,
+    Eye
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db.js';
-import { TEMPLATES } from '../utils/templates';
+import { TEMPLATES, formatCustomTemplateForPicker } from '../utils/templates';
+import UploadTemplateModal from '../components/TemplateManager/UploadTemplateModal';
+import TemplatePreviewModal from '../components/TemplateManager/TemplatePreviewModal';
 import { saveClient, createEmptyClient } from '../services/clientService.js';
 import { getSettings } from '../services/settingsService.js';
 import { validateGST, validateEmail, validatePhone } from '../utils/validation';
@@ -41,6 +45,20 @@ export default function CreateInvoice() {
     const [selectedTemplate, setSelectedTemplate] = useState('');
     const liveClients = useLiveQuery(() => db.clients.toArray(), []);
     const clients = useMemo(() => liveClients || [], [liveClients]);
+
+    // Live Dexie templates and user-uploaded custom templates
+    const liveTemplates = useLiveQuery(() => db.templates.toArray(), []);
+    const dexieTemplates = useMemo(() => liveTemplates || [], [liveTemplates]);
+    const customTemplates = useMemo(() => dexieTemplates.filter(t => !t.isBuiltIn), [dexieTemplates]);
+    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+    const [previewTemplate, setPreviewTemplate] = useState(null);
+
+    // Combined template catalog: custom templates + legacy built-in themes
+    const allTemplates = useMemo(() => {
+        const customFormatted = customTemplates.map(formatCustomTemplateForPicker).filter(Boolean);
+        return [...customFormatted, ...TEMPLATES];
+    }, [customTemplates]);
+
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(PAGINATION.DEFAULT_PAGE);
     const [IsGST, setIsGST] = useState(APP_DEFAULTS.DEFAULT_IS_GST);
@@ -171,7 +189,9 @@ export default function CreateInvoice() {
     };
 
     const selectedClientData = clients.find(c => c.id.toString() === selectedClient);
-    const selectedTemplateData = TEMPLATES.find(t => t.id === selectedTemplate);
+    const selectedTemplateData = allTemplates.find(
+        t => t.id === selectedTemplate || String(t.id) === String(selectedTemplate) || (t.key && String(t.key) === String(selectedTemplate))
+    );
 
     return (
         <div className="p-6 md:p-8 max-w-6xl mx-auto pb-16">
@@ -574,23 +594,65 @@ export default function CreateInvoice() {
                         </p>
                     </div>
 
-                    {selectedTemplateData ? (
-                        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold self-start sm:self-auto animate-in fade-in">
-                            <Check size={14} strokeWidth={3} />
-                            <span>Selected: {selectedTemplateData.name}</span>
-                        </div>
-                    ) : (
-                        <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg self-start sm:self-auto flex items-center gap-1.5">
-                            <AlertCircle size={14} />
-                            Template required to proceed
-                        </span>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                        <button
+                            type="button"
+                            onClick={() => setIsUploadModalOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm hover:shadow transition-all cursor-pointer"
+                        >
+                            <Upload size={14} />
+                            Upload Your Own Template
+                        </button>
+
+                        {selectedTemplateData ? (
+                            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold animate-in fade-in">
+                                <Check size={14} strokeWidth={3} />
+                                <span>Selected: {selectedTemplateData.name}</span>
+                            </div>
+                        ) : (
+                            <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                                <AlertCircle size={14} />
+                                Template required to proceed
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 {/* Templates Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-                    {TEMPLATES.map(template => {
-                        const isSelected = selectedTemplate === template.id;
+                    {/* Upload Your Own Template Card */}
+                    <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setIsUploadModalOpen(true)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setIsUploadModalOpen(true);
+                            }
+                        }}
+                        className="bg-slate-50 hover:bg-blue-50/40 rounded-xl border-2 border-dashed border-slate-300 hover:border-blue-400 p-6 flex flex-col items-center justify-center text-center transition-all cursor-pointer group min-h-[220px]"
+                    >
+                        <div className="w-12 h-12 rounded-2xl bg-white group-hover:bg-blue-600 group-hover:text-white text-blue-600 flex items-center justify-center mb-3 shadow-sm border border-slate-200 group-hover:border-blue-600 transition-all">
+                            <Upload size={22} />
+                        </div>
+                        <h4 className="font-bold text-sm text-slate-800 group-hover:text-blue-700 transition-colors">
+                            Upload Your Own Template
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-1 max-w-[180px]">
+                            Import a local .html or .htm file with dynamic invoice tokens
+                        </p>
+                        <span className="mt-4 px-3 py-1.5 bg-white group-hover:bg-blue-600 group-hover:text-white text-slate-700 text-xs font-bold rounded-lg border border-slate-200 group-hover:border-blue-600 shadow-sm transition-all">
+                            + Add Custom Template
+                        </span>
+                    </div>
+
+                    {allTemplates.map(template => {
+                        const isSelected = selectedTemplate != null && selectedTemplate !== '' && (
+                            template.id === selectedTemplate ||
+                            String(template.id) === String(selectedTemplate) ||
+                            (template.key && String(template.key) === String(selectedTemplate))
+                        );
 
                         return (
                             <div
@@ -627,18 +689,40 @@ export default function CreateInvoice() {
                                             </div>
                                         )}
 
-                                        <div className="absolute bottom-2.5 left-3 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-semibold text-white uppercase tracking-wider">
-                                            {template.layout} layout
+                                        <div className="absolute bottom-2.5 left-3 flex items-center gap-1.5">
+                                            <span className="bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-semibold text-white uppercase tracking-wider">
+                                                {template.layout} layout
+                                            </span>
+                                            {template.isCustom && (
+                                                <span className="bg-purple-600/90 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-bold text-white uppercase tracking-wider">
+                                                    Custom
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
 
                                     {/* Title and Description */}
                                     <div className="p-4 pb-2">
-                                        <h4 className={`font-bold text-sm transition-colors ${
-                                            isSelected ? 'text-blue-700' : 'text-slate-900 group-hover:text-blue-600'
-                                        }`}>
-                                            {template.name}
-                                        </h4>
+                                        <div className="flex items-center justify-between gap-1">
+                                            <h4 className={`font-bold text-sm transition-colors truncate ${
+                                                isSelected ? 'text-blue-700' : 'text-slate-900 group-hover:text-blue-600'
+                                            }`} title={template.name}>
+                                                {template.name}
+                                            </h4>
+                                            {template.rawRecord && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setPreviewTemplate(template.rawRecord);
+                                                    }}
+                                                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors shrink-0"
+                                                    title="Preview template"
+                                                >
+                                                    <Eye size={14} />
+                                                </button>
+                                            )}
+                                        </div>
                                         <p className="text-xs text-slate-500 mt-1 line-clamp-2">
                                             {template.description}
                                         </p>
@@ -840,6 +924,23 @@ export default function CreateInvoice() {
                     </div>
                 </div>
             )}
+
+            {/* Upload Custom Template Modal */}
+            <UploadTemplateModal
+                isOpen={isUploadModalOpen}
+                onClose={() => setIsUploadModalOpen(false)}
+                existingTemplates={dexieTemplates}
+                onSuccess={(savedId) => {
+                    setSelectedTemplate(savedId);
+                }}
+            />
+
+            {/* Template Preview Modal */}
+            <TemplatePreviewModal
+                isOpen={Boolean(previewTemplate)}
+                onClose={() => setPreviewTemplate(null)}
+                template={previewTemplate}
+            />
         </div>
     );
 }

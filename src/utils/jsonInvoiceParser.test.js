@@ -222,6 +222,48 @@ const resTpl4 = resolveInvoiceData({
 assert(resTpl4.templateSource === 'default', 'Empty template falls back to default');
 assert(resTpl4.invoice.template === 'default', 'Resolved template is "default"');
 
+// Case 5: Custom template validation with availableTemplates
+const mockCustomTemplates = [
+    { id: 101, name: 'Bespoke Dark Theme', isCustom: true, key: 'custom_101' },
+    { id: 'custom_pro_v2', name: 'Pro V2 Layout', isCustom: true }
+];
+
+assert(isValidTemplateId(101, mockCustomTemplates) === true, 'Numeric custom template ID is valid when present in availableTemplates');
+assert(isValidTemplateId('101', mockCustomTemplates) === true, 'Stringified numeric custom template ID is valid');
+assert(isValidTemplateId('custom_101', mockCustomTemplates) === true, 'Custom template key is valid');
+assert(isValidTemplateId('custom_pro_v2', mockCustomTemplates) === true, 'String slug custom template ID is valid');
+assert(isValidTemplateId(999, mockCustomTemplates) === false, 'Unknown numeric custom template ID is rejected');
+assert(isValidTemplateId('unknown_custom', mockCustomTemplates) === false, 'Unknown string template ID is rejected');
+
+// Case 6: User manually selects custom template (numeric ID)
+const resTpl5 = resolveInvoiceData({
+    extractedData: { template: 'corporate' },
+    manualTemplateId: 101,
+    availableTemplates: mockCustomTemplates
+});
+assert(resTpl5.templateSource === 'manual', 'Manual custom template selection has templateSource="manual"');
+assert(resTpl5.invoice.template === 101, 'Resolved template preserves custom numeric template ID 101');
+assert(resTpl5.templateName === 'Bespoke Dark Theme', 'Resolved templateName is "Bespoke Dark Theme"');
+
+// Case 7: JSON contains custom template ID matching availableTemplates
+const resTpl6 = resolveInvoiceData({
+    extractedData: { template: 'custom_pro_v2' },
+    manualTemplateId: null,
+    availableTemplates: mockCustomTemplates
+});
+assert(resTpl6.templateSource === 'json', 'JSON-specified custom template has templateSource="json"');
+assert(resTpl6.invoice.template === 'custom_pro_v2', 'Resolved template preserves custom string template ID');
+assert(resTpl6.templateName === 'Pro V2 Layout', 'Resolved templateName is "Pro V2 Layout"');
+
+// Case 8: Manual selection of nonexistent template ID falls back to default
+const resTpl7 = resolveInvoiceData({
+    extractedData: { template: 'corporate' },
+    manualTemplateId: 'nonexistent_custom_id',
+    availableTemplates: mockCustomTemplates
+});
+assert(resTpl7.templateSource === 'json', 'Invalid manual template falls back to valid JSON template');
+assert(resTpl7.invoice.template === 'corporate', 'Resolved template is corporate when manual is invalid');
+
 // ==========================================
 // 4. INVOICE EDITOR INTEGRATION & TOTALS TESTS
 // ==========================================

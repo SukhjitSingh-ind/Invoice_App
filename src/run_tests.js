@@ -14,7 +14,8 @@ const testFiles = [
     './utils/clientHelpers.test.js',
     './utils/jsonInvoiceParser.test.js',
     './services/migrationService.test.js',
-    './services/templateService.test.js'
+    './services/templateService.test.js',
+    './utils/templateValidator.test.js'
 ];
 
 async function runTests() {
