@@ -249,6 +249,29 @@ async function runTests() {
     assert(userTemplateAfterSeed.name === 'Bespoke Vintage Layout', 'User-created template properties preserved');
     assert(userTemplateAfterSeed.isBuiltIn === false, 'User-created template isBuiltIn is false');
 
+    // User-created template with name matching a built-in name must NOT be treated as built-in (Finding 5)
+    const userHijackDbName = 'TestUserHijackDB_' + Date.now();
+    const hijackDb = new InvoiceAppDatabase(userHijackDbName);
+    await hijackDb.open();
+    const customClassicId = await hijackDb.templates.add({
+        name: 'Classic',
+        isBuiltIn: false,
+        isDefault: false,
+        html: '<div>User Custom Classic</div>',
+        css: '',
+        updatedAt: new Date()
+    });
+    const hijackSeedResult = await seedBuiltInTemplates(hijackDb);
+    assert(hijackSeedResult.seededCount === 3, 'All 3 built-in templates seeded even when user has template named Classic');
+    const userCustomClassic = await hijackDb.templates.get(customClassicId);
+    assert(userCustomClassic.isBuiltIn === false, 'User custom template named "Classic" retains isBuiltIn: false');
+    assert(userCustomClassic.html === '<div>User Custom Classic</div>', 'User custom template content preserved');
+    const builtInClassic = await hijackDb.templates.filter(t => t.key === 'classic').first();
+    assert(builtInClassic !== null, 'Built-in Classic is seeded separately with key: classic');
+    assert(builtInClassic.isBuiltIn === true, 'Built-in Classic is marked as isBuiltIn: true');
+    assert(builtInClassic.id !== customClassicId, 'Built-in Classic has distinct ID from user custom template');
+    await hijackDb.close();
+
     const totalWithUserTemplate = await getAllTemplatesAsync(v2Db);
     assert(totalWithUserTemplate.length === 4, 'Total templates is 4 (3 built-in + 1 user template)');
 

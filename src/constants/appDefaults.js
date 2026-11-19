@@ -43,10 +43,18 @@ export const ROUTES = Object.freeze({
     PREVIEW_INVOICE: '/preview/:id',
     SETTINGS: '/settings',
     YOUR_DETAILS: '/your-details',
+    TEMPLATE_STUDIO: '/template-studio',
 });
 
 export const getEditInvoiceRoute = (id) => `/edit/${id}`;
 export const getPreviewInvoiceRoute = (id) => `/preview/${id}`;
+export const getTemplateStudioRoute = (id, action) => {
+    if (!id) return '/template-studio';
+    const params = new URLSearchParams();
+    params.set('templateId', String(id));
+    if (action) params.set('action', action);
+    return `/template-studio?${params.toString()}`;
+};
 
 export const TOAST_TYPES = Object.freeze({
     SUCCESS: 'success',

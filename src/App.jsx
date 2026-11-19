@@ -17,6 +17,7 @@ const InvoiceEditor = lazy(() => import('./Pages/InvoiceEditor'));
 const Settings = lazy(() => import('./Pages/Settings'));
 const YourDetails = lazy(() => import('./Pages/YourDetails'));
 const InvoicePreview = lazy(() => import('./Pages/InvoicePreview'));
+const TemplateStudio = lazy(() => import('./Pages/TemplateStudio'));
 
 function PageLoader() {
   return (
@@ -51,6 +52,7 @@ export default function App() {
             </Route>
 
             <Route path={ROUTES.PREVIEW_INVOICE} element={<InvoicePreview />} />
+            <Route path={ROUTES.TEMPLATE_STUDIO} element={<TemplateStudio />} />
           </Routes>
         </Suspense>
       </Router>

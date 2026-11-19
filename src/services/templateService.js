@@ -10,6 +10,7 @@ import {
     DEXIE_TRANSACTION_MODE
 } from '../constants/index.js';
 import { BUILT_IN_TEMPLATES } from '../templates/builtInTemplates.js';
+import { generateUniqueTemplateName } from '../utils/templateValidator.js';
 
 const activeSeedPromises = new WeakMap();
 
@@ -59,12 +60,18 @@ export async function seedBuiltInTemplates(dbInstance = db) {
                 let defaultAssignedDuringSeeding = hasExistingDefault;
 
                 for (const def of BUILT_IN_TEMPLATES) {
-                    const existingByName = await dbInstance.templates.where('name').equals(def.name).first();
-                    const existingByKey = !existingByName && def.key
-                        ? await dbInstance.templates.filter(t => t.key === def.key).first()
-                        : null;
+                    let existing = null;
+                    if (def.key) {
+                        existing = await dbInstance.templates.filter(t => t.key === def.key).first();
+                    }
 
-                    const existing = existingByName || existingByKey;
+                    if (!existing) {
+                        // Check for legacy record by name, but ONLY if it is not explicitly a user-created template
+                        const legacyByName = await dbInstance.templates.where('name').equals(def.name).first();
+                        if (legacyByName && legacyByName.isBuiltIn !== false) {
+                            existing = legacyByName;
+                        }
+                    }
 
                     if (existing) {
                         existingCount++;
@@ -72,7 +79,7 @@ export async function seedBuiltInTemplates(dbInstance = db) {
                         if (!existing.key && def.key) {
                             updates.key = def.key;
                         }
-                        if (existing.isBuiltIn === undefined) {
+                        if (existing.isBuiltIn !== true) {
                             updates.isBuiltIn = true;
                         }
                         if (Object.keys(updates).length > 0) {
@@ -321,6 +328,16 @@ export async function saveTemplateAsync(template, dbInstance = db) {
                 throw new Error(`A template named "${record.name}" already exists. Please choose a unique name.`);
             }
 
+            if (record.id) {
+                const existing = await dbInstance.templates.get(record.id);
+                if (existing && existing.isBuiltIn) {
+                    throw new Error(`Built-in template "${existing.name}" is read-only and cannot be modified. Please duplicate the template to customize it.`);
+                }
+            }
+
+            // Always enforce custom template status for user-managed saves
+            record.isBuiltIn = false;
+
             if (record.isDefault) {
                 await dbInstance.templates
                     .filter(t => Boolean(t.isDefault) && (!record.id || t.id !== record.id))
@@ -333,6 +350,119 @@ export async function saveTemplateAsync(template, dbInstance = db) {
             } else {
                 return await dbInstance.templates.add(record);
             }
+        }
+    );
+}
+
+/**
+ * Duplicates any existing template (built-in or custom) and persists it as an independent custom template.
+ *
+ * Rules:
+ * - Built-in templates remain completely read-only and untouched.
+ * - The duplicated template is marked as isBuiltIn: false and isDefault: false.
+ * - Generates a deterministic, unique duplicate name (e.g., "Classic (Copy)") avoiding collisions.
+ * - Preserves complete HTML and CSS structure.
+ * - Does not inherit built-in lookup keys to prevent slug collisions.
+ *
+ * @param {number|string} id - ID of the template to duplicate
+ * @param {import('dexie').Dexie} [dbInstance=db]
+ * @param {object} [options={}]
+ * @param {string} [options.newName] - Optional custom name for the duplicate
+ * @returns {Promise<{ id: number, name: string, template: object }>}
+ */
+export async function duplicateTemplateAsync(id, dbInstance = db, options = {}) {
+    if (!dbInstance.isOpen()) {
+        await dbInstance.open();
+    }
+
+    const source = await getTemplateByIdAsync(id, dbInstance);
+    if (!source) {
+        throw new Error(`Template with ID "${id}" not found`);
+    }
+
+    return await dbInstance.transaction(
+        DEXIE_TRANSACTION_MODE.READ_WRITE,
+        [dbInstance.templates],
+        async () => {
+            const allTemplates = await dbInstance.templates.toArray();
+            const duplicateName = options.newName && options.newName.trim()
+                ? options.newName.trim()
+                : generateUniqueTemplateName(source.name, allTemplates);
+
+            // Verify unique name
+            const normalizedName = duplicateName.toLowerCase();
+            const collision = allTemplates.some(t => t && t.name && t.name.trim().toLowerCase() === normalizedName);
+            if (collision) {
+                throw new Error(`A template named "${duplicateName}" already exists. Please choose a unique name.`);
+            }
+
+            const duplicatePayload = {
+                name: duplicateName,
+                html: source.html,
+                css: source.css || '',
+                isBuiltIn: false, // Critical: always false for duplicates
+                isDefault: false, // Do not replace active default
+                updatedAt: new Date()
+            };
+
+            const newId = await dbInstance.templates.add(duplicatePayload);
+            const createdTemplate = { ...duplicatePayload, id: newId };
+
+            return {
+                id: newId,
+                name: duplicateName,
+                template: createdTemplate
+            };
+        }
+    );
+}
+
+/**
+ * Renames an existing custom template.
+ * Built-in templates are read-only and cannot be renamed.
+ *
+ * @param {number|string} id
+ * @param {string} newName
+ * @param {import('dexie').Dexie} [dbInstance=db]
+ * @returns {Promise<object>}
+ */
+export async function renameTemplateAsync(id, newName, dbInstance = db) {
+    if (!dbInstance.isOpen()) {
+        await dbInstance.open();
+    }
+    const numId = typeof id === 'string' && /^\d+$/.test(id) ? Number(id) : id;
+
+    return await dbInstance.transaction(
+        DEXIE_TRANSACTION_MODE.READ_WRITE,
+        [dbInstance.templates],
+        async () => {
+            const target = await dbInstance.templates.get(numId);
+            if (!target) {
+                throw new Error(`Template with ID "${id}" not found`);
+            }
+            if (target.isBuiltIn) {
+                throw new Error(`Cannot rename built-in template "${target.name}". Built-in templates are read-only and cannot be renamed.`);
+            }
+
+            const trimmedName = typeof newName === 'string' ? newName.trim() : '';
+            if (!trimmedName) {
+                throw new Error('Template name cannot be empty or only whitespace.');
+            }
+
+            const allTemplates = await dbInstance.templates.toArray();
+            const normalized = trimmedName.toLowerCase();
+            const isDuplicate = allTemplates.some(t =>
+                t && t.id !== numId && t.name && t.name.trim().toLowerCase() === normalized
+            );
+
+            if (isDuplicate) {
+                throw new Error(`A template named "${trimmedName}" already exists. Please choose a unique name.`);
+            }
+
+            target.name = trimmedName;
+            target.updatedAt = new Date();
+            await dbInstance.templates.put(target);
+            return target;
         }
     );
 }
@@ -402,6 +532,10 @@ export async function deleteTemplateAsync(id, dbInstance = db, options = {}) {
             const templateToDelete = await dbInstance.templates.get(numId);
             if (!templateToDelete) {
                 return false;
+            }
+
+            if (templateToDelete.isBuiltIn) {
+                throw new Error(`Cannot delete built-in template "${templateToDelete.name}". Built-in templates are read-only.`);
             }
 
             // Check if existing invoices reference this template

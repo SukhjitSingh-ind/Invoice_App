@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Save, RotateCcw, CheckCircle2, Layout, Upload, Eye, Trash2, Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Save, RotateCcw, CheckCircle2, Layout, Upload, Eye, Trash2, Check, Copy, Edit3, Plus, Sparkles } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db.js';
 import { getSettings, updateSettings, resetSettings } from '../services/settingsService';
@@ -7,13 +8,14 @@ import { exportInvoices, importInvoices } from '../services/invoiceService';
 import { exportClientsToJSON, importClientsFromJSON } from '../services/clientService';
 import { exportItemsToJSON, importItemsFromJSON } from '../services/itemService';
 import { exportFullBackup, importFullBackup } from '../services/backupService';
-import { setDefaultTemplateAsync, deleteTemplateAsync } from '../services/templateService';
+import { setDefaultTemplateAsync, deleteTemplateAsync, duplicateTemplateAsync } from '../services/templateService';
 import UploadTemplateModal from '../components/TemplateManager/UploadTemplateModal';
 import TemplatePreviewModal from '../components/TemplateManager/TemplatePreviewModal';
 import { useToast } from '../components/Toast';
-import { DEFAULT_TOAST_DURATION, TOAST_TYPES } from '../constants/index.js';
+import { DEFAULT_TOAST_DURATION, TOAST_TYPES, ROUTES, getTemplateStudioRoute } from '../constants/index.js';
 
 export default function Settings() {
+    const navigate = useNavigate();
     const [settings, setSettings] = useState(() => getSettings());
     const [saved, setSaved] = useState(false);
     const { addToast } = useToast();
@@ -69,6 +71,15 @@ export default function Settings() {
             } catch (err) {
                 addToast(`Failed to delete template: ${err.message}`, TOAST_TYPES.ERROR);
             }
+        }
+    };
+
+    const handleDuplicateTemplate = async (templateId) => {
+        try {
+            const res = await duplicateTemplateAsync(templateId, db);
+            addToast(`"${res.name}" created as a new custom template.`, TOAST_TYPES.SUCCESS);
+        } catch (err) {
+            addToast(`Failed to duplicate template: ${err.message}`, TOAST_TYPES.ERROR);
         }
     };
 
@@ -298,17 +309,28 @@ export default function Settings() {
                                     Template Manager
                                 </h2>
                                 <p className="text-slate-600 text-sm mt-1">
-                                    Manage built-in and custom invoice templates, set defaults, or upload your own HTML templates.
+                                    Manage built-in and custom invoice templates, design in Template Studio, or upload HTML templates.
                                 </p>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => setIsUploadModalOpen(true)}
-                                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer self-start sm:self-auto shrink-0"
-                            >
-                                <Upload size={16} />
-                                Upload Your Own Template
-                            </button>
+                            <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(ROUTES.TEMPLATE_STUDIO)}
+                                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer"
+                                    title="Open interactive split-screen HTML template editor"
+                                >
+                                    <Plus size={16} />
+                                    New in Template Studio
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsUploadModalOpen(true)}
+                                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm rounded-xl border border-slate-300 shadow-sm hover:shadow transition-all cursor-pointer"
+                                >
+                                    <Upload size={16} />
+                                    Upload Your Own Template
+                                </button>
+                            </div>
                         </div>
 
                         {/* Templates List Grid */}
@@ -360,22 +382,49 @@ export default function Settings() {
                                         </div>
 
                                         {/* Action Buttons */}
-                                        <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200/80">
-                                            <button
-                                                type="button"
-                                                onClick={() => setPreviewTemplate(tpl)}
-                                                className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
-                                            >
-                                                <Eye size={13} />
-                                                Preview
-                                            </button>
+                                        <div className="flex items-center justify-between gap-1.5 pt-3 border-t border-slate-200/80 flex-wrap">
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPreviewTemplate(tpl)}
+                                                    className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-xs"
+                                                    title="Preview rendered invoice template"
+                                                >
+                                                    <Eye size={13} />
+                                                    Preview
+                                                </button>
 
-                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDuplicateTemplate(tpl.id, tpl.name)}
+                                                    className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-xs"
+                                                    title="Duplicate this template as a new custom template"
+                                                >
+                                                    <Copy size={13} />
+                                                    Duplicate
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate(getTemplateStudioRoute(tpl.id, isBuiltIn ? 'duplicate' : 'edit'))}
+                                                    className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-xs ${
+                                                        isBuiltIn
+                                                            ? 'text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200'
+                                                            : 'text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200'
+                                                    }`}
+                                                    title={isBuiltIn ? 'Duplicate and customize this built-in template in Studio' : 'Edit this custom template in Studio'}
+                                                >
+                                                    {isBuiltIn ? <Sparkles size={13} /> : <Edit3 size={13} />}
+                                                    {isBuiltIn ? 'Customize' : 'Edit'}
+                                                </button>
+                                            </div>
+
+                                            <div className="flex items-center gap-1">
                                                 {!isDefault && (
                                                     <button
                                                         type="button"
                                                         onClick={() => handleSetDefaultTemplate(tpl.id, tpl.name)}
-                                                        className="px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer"
+                                                        className="px-2 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer"
                                                         title="Set as default template"
                                                     >
                                                         Set Default

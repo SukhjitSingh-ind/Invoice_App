@@ -117,8 +117,8 @@ export default function CreateInvoiceFromJson() {
                 warnings: []
             };
         }
-        return parseAndValidateInvoiceJson(jsonInput);
-    }, [jsonInput]);
+        return parseAndValidateInvoiceJson(jsonInput, allSelectableTemplates);
+    }, [jsonInput, allSelectableTemplates]);
 
     // 2. Resolve selected manual client object
     const manualClient = useMemo(() => {
