@@ -1,5 +1,5 @@
 import { db } from '../db/db.js';
-import { transformInvoiceForDexie } from './migrationService.js';
+import { transformInvoiceForDexie, DEFAULT_INITIAL_SETTINGS } from './migrationService.js';
 import { loadInvoicesFromDb } from './invoiceService.js';
 import { loadClientsFromDb } from './clientService.js';
 import { loadItemsFromDb } from './itemService.js';
@@ -10,37 +10,51 @@ import {
     CURRENT_BACKUP_VERSION,
     MIME_TYPES,
     DEXIE_TRANSACTION_MODE,
-    DEFAULT_PROFILE_ID
+    DEFAULT_PROFILE_ID,
+    DEFAULT_BUILT_IN_TEMPLATE_NAME
 } from '../constants/index.js';
 
 /**
+ * Assembles the full backup data structure from Dexie tables.
+ * Separated from file download logic for clean testability and environment independence.
+ *
+ * @param {import('dexie').Dexie} [dbInstance=db]
+ * @returns {Promise<object>}
+ */
+export async function createFullBackupData(dbInstance = db) {
+    const invoices = await dbInstance.invoices.toArray();
+    const clients = await dbInstance.clients.toArray();
+    const items = await dbInstance.items.toArray();
+    const companies = await dbInstance.companies.toArray();
+    const templates = await dbInstance.templates.toArray();
+    const configRecord = await dbInstance.settings.get(STORAGE_KEYS.APP_CONFIG);
+
+    return {
+        type: STORAGE_KEYS.FULL_BACKUP_TYPE,
+        version: CURRENT_BACKUP_VERSION,
+        exportedAt: new Date().toISOString(),
+        data: {
+            invoices,
+            clients,
+            items,
+            companies,
+            settings: configRecord?.value || null,
+            templates
+        }
+    };
+}
+
+/**
  * Export a single JSON file containing invoices, clients, items, companies, settings, and templates from Dexie.
- * @returns {Promise<{ success: boolean, message?: string }>}
+ * In a browser environment, triggers a file download. In non-browser environments, serializes the backup payload.
+ *
+ * @returns {Promise<{ success: boolean, backup?: object, downloaded: boolean, message?: string }>}
  */
 export async function exportFullBackup() {
     try {
-        const invoices = await db.invoices.toArray();
-        const clients = await db.clients.toArray();
-        const items = await db.items.toArray();
-        const companies = await db.companies.toArray();
-        const templates = await db.templates.toArray();
-        const configRecord = await db.settings.get(STORAGE_KEYS.APP_CONFIG);
-
-        const backup = {
-            type: STORAGE_KEYS.FULL_BACKUP_TYPE,
-            version: CURRENT_BACKUP_VERSION,
-            exportedAt: new Date().toISOString(),
-            data: {
-                invoices,
-                clients,
-                items,
-                companies,
-                settings: configRecord?.value || null,
-                templates
-            }
-        };
-
+        const backup = await createFullBackupData(db);
         const json = JSON.stringify(backup, null, 2);
+        let downloaded = false;
 
         if (typeof document !== 'undefined' && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
             const blob = new Blob([json], { type: MIME_TYPES.JSON });
@@ -55,18 +69,20 @@ export async function exportFullBackup() {
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
+            downloaded = true;
         }
 
-        return { success: true, backup };
+        return { success: true, backup, downloaded };
     } catch (error) {
         console.error('Error exporting full backup:', error);
-        return { success: false, message: error.message };
+        return { success: false, message: error.message, downloaded: false };
     }
 }
 
 /**
  * Import a full JSON backup and restore into Dexie.js.
  * Restores templates and preserves or safely falls back for selectedTemplateId.
+ * Explicitly replaces settings with sensible defaults when backup settings are null/missing.
  * Backward compatible with legacy backups lacking a templates collection.
  *
  * @param {string} jsonData
@@ -117,6 +133,16 @@ export async function importFullBackup(jsonData) {
         let safeTemplates = null;
         if (Array.isArray(templates)) {
             safeTemplates = templates.filter(t => t && typeof t.name === 'string');
+            const defaultTemplates = safeTemplates.filter(t => Boolean(t.isDefault));
+            if (defaultTemplates.length > 1) {
+                const candidateId = settings?.selectedTemplateId;
+                const preferred = defaultTemplates.find(t => t.id === candidateId) ||
+                    defaultTemplates.find(t => t.name === DEFAULT_BUILT_IN_TEMPLATE_NAME) ||
+                    defaultTemplates[0];
+                for (const t of safeTemplates) {
+                    t.isDefault = (t === preferred);
+                }
+            }
         }
 
         await db.transaction(
@@ -143,18 +169,26 @@ export async function importFullBackup(jsonData) {
                 const candidateTemplateId = settings?.selectedTemplateId ?? null;
                 const restoredSelectedTemplateId = await resolveValidTemplateId(candidateTemplateId, db);
 
-                if (settings && typeof settings === 'object') {
-                    await db.settings.put({
-                        key: STORAGE_KEYS.APP_CONFIG,
-                        value: {
-                            validation: settings.validation,
-                            display: settings.display,
-                            payment: settings.payment,
-                            activeProfileId: settings.activeProfileId || safeCompanies[0]?.id || DEFAULT_PROFILE_ID,
-                            selectedTemplateId: restoredSelectedTemplateId
-                        }
-                    });
-                }
+                const restoredSettingsValue = (settings && typeof settings === 'object')
+                    ? {
+                        validation: { ...DEFAULT_INITIAL_SETTINGS.validation, ...(settings.validation || {}) },
+                        display: { ...DEFAULT_INITIAL_SETTINGS.display, ...(settings.display || {}) },
+                        payment: { ...DEFAULT_INITIAL_SETTINGS.payment, ...(settings.payment || {}) },
+                        activeProfileId: settings.activeProfileId || safeCompanies[0]?.id || DEFAULT_PROFILE_ID,
+                        selectedTemplateId: restoredSelectedTemplateId
+                    }
+                    : {
+                        validation: { ...DEFAULT_INITIAL_SETTINGS.validation },
+                        display: { ...DEFAULT_INITIAL_SETTINGS.display },
+                        payment: { ...DEFAULT_INITIAL_SETTINGS.payment },
+                        activeProfileId: safeCompanies[0]?.id || DEFAULT_PROFILE_ID,
+                        selectedTemplateId: restoredSelectedTemplateId
+                    };
+
+                await db.settings.put({
+                    key: STORAGE_KEYS.APP_CONFIG,
+                    value: restoredSettingsValue
+                });
             }
         );
 

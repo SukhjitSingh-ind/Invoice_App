@@ -44,6 +44,20 @@ export async function seedBuiltInTemplates(dbInstance = db) {
             DEXIE_TRANSACTION_MODE.READ_WRITE,
             [dbInstance.templates, dbInstance.settings],
             async () => {
+                // Check if multiple defaults exist in the current store and reconcile
+                const existingDefaults = await dbInstance.templates.filter(t => Boolean(t.isDefault)).toArray();
+                if (existingDefaults.length > 1) {
+                    const primaryDefault = existingDefaults.find(t => t.name === DEFAULT_BUILT_IN_TEMPLATE_NAME) || existingDefaults[0];
+                    for (const extra of existingDefaults) {
+                        if (extra.id !== primaryDefault.id) {
+                            await dbInstance.templates.update(extra.id, { isDefault: false });
+                        }
+                    }
+                }
+
+                const hasExistingDefault = existingDefaults.length > 0;
+                let defaultAssignedDuringSeeding = hasExistingDefault;
+
                 for (const def of BUILT_IN_TEMPLATES) {
                     const existingByName = await dbInstance.templates.where('name').equals(def.name).first();
                     const existingByKey = !existingByName && def.key
@@ -55,16 +69,35 @@ export async function seedBuiltInTemplates(dbInstance = db) {
                     if (existing) {
                         existingCount++;
                     } else {
+                        const shouldBeDefault = Boolean(def.isDefault) && !defaultAssignedDuringSeeding;
+                        if (shouldBeDefault) {
+                            defaultAssignedDuringSeeding = true;
+                        }
+
                         await dbInstance.templates.add({
                             name: def.name,
                             key: def.key,
-                            isDefault: Boolean(def.isDefault),
+                            isDefault: shouldBeDefault,
                             isBuiltIn: true,
                             html: def.html,
                             css: def.css,
                             updatedAt: new Date()
                         });
                         seededCount++;
+                    }
+                }
+
+                // If no template is marked default after insertion, assign Classic or first available
+                const activeDefault = await dbInstance.templates.filter(t => Boolean(t.isDefault)).first();
+                if (!activeDefault) {
+                    const classic = await dbInstance.templates.where('name').equals(DEFAULT_BUILT_IN_TEMPLATE_NAME).first();
+                    if (classic) {
+                        await dbInstance.templates.update(classic.id, { isDefault: true, updatedAt: new Date() });
+                    } else {
+                        const first = await dbInstance.templates.toCollection().first();
+                        if (first) {
+                            await dbInstance.templates.update(first.id, { isDefault: true, updatedAt: new Date() });
+                        }
                     }
                 }
 
@@ -206,7 +239,39 @@ export async function getDefaultTemplate(dbInstance = db) {
 }
 
 /**
+ * Validates and sanitizes a template object before persistence.
+ *
+ * @param {object} template
+ * @returns {object} Sanitized template object
+ * @throws {TypeError|Error} If validation fails
+ */
+export function validateTemplate(template) {
+    if (!template || typeof template !== 'object') {
+        throw new TypeError('Template must be a non-null object');
+    }
+    const name = typeof template.name === 'string' ? template.name.trim() : '';
+    if (!name) {
+        throw new Error('Template name is required and must be a non-empty string');
+    }
+    if (typeof template.html !== 'string' || !template.html.trim()) {
+        throw new Error('Template HTML is required and must be a non-empty string');
+    }
+    const css = typeof template.css === 'string' ? template.css : '';
+
+    return {
+        ...template,
+        name,
+        html: template.html,
+        css,
+        isDefault: Boolean(template.isDefault),
+        isBuiltIn: Boolean(template.isBuiltIn)
+    };
+}
+
+/**
  * Creates or updates a template in Dexie.
+ * Enforces validation and default template uniqueness transactionally.
+ *
  * @param {object} template
  * @param {import('dexie').Dexie} [dbInstance=db]
  * @returns {Promise<number|string>} Returns the template ID
@@ -216,21 +281,72 @@ export async function saveTemplateAsync(template, dbInstance = db) {
         await dbInstance.open();
     }
 
+    const validated = validateTemplate(template);
     const record = {
-        ...template,
+        ...validated,
         updatedAt: new Date()
     };
 
-    if (record.id) {
-        await dbInstance.templates.put(record);
-        return record.id;
-    } else {
-        return await dbInstance.templates.add(record);
-    }
+    return await dbInstance.transaction(
+        DEXIE_TRANSACTION_MODE.READ_WRITE,
+        [dbInstance.templates],
+        async () => {
+            if (record.isDefault) {
+                await dbInstance.templates
+                    .filter(t => Boolean(t.isDefault) && (!record.id || t.id !== record.id))
+                    .modify({ isDefault: false });
+            }
+
+            if (record.id) {
+                await dbInstance.templates.put(record);
+                return record.id;
+            } else {
+                return await dbInstance.templates.add(record);
+            }
+        }
+    );
 }
 
 /**
- * Deletes a template from Dexie by ID.
+ * Designates a template as the single default template transactionally.
+ *
+ * @param {number|string} id
+ * @param {import('dexie').Dexie} [dbInstance=db]
+ * @returns {Promise<boolean>}
+ */
+export async function setDefaultTemplateAsync(id, dbInstance = db) {
+    if (!dbInstance.isOpen()) {
+        await dbInstance.open();
+    }
+    const numId = typeof id === 'string' && /^\d+$/.test(id) ? Number(id) : id;
+
+    return await dbInstance.transaction(
+        DEXIE_TRANSACTION_MODE.READ_WRITE,
+        [dbInstance.templates],
+        async () => {
+            const target = await dbInstance.templates.get(numId);
+            if (!target) {
+                throw new Error(`Template with ID ${id} not found`);
+            }
+
+            await dbInstance.templates
+                .filter(t => Boolean(t.isDefault) && t.id !== numId)
+                .modify({ isDefault: false });
+
+            target.isDefault = true;
+            target.updatedAt = new Date();
+            await dbInstance.templates.put(target);
+
+            return true;
+        }
+    );
+}
+
+/**
+ * Deletes a template from Dexie by ID atomically.
+ * If the deleted template was selected in settings or was marked as default,
+ * updates settings and reassigns default within the same transaction.
+ *
  * @param {number|string} id
  * @param {import('dexie').Dexie} [dbInstance=db]
  * @returns {Promise<boolean>}
@@ -240,21 +356,51 @@ export async function deleteTemplateAsync(id, dbInstance = db) {
         await dbInstance.open();
     }
     const numId = typeof id === 'string' && /^\d+$/.test(id) ? Number(id) : id;
-    await dbInstance.templates.delete(numId);
 
+    const tables = [dbInstance.templates];
     if (dbInstance.settings) {
-        try {
-            const configRecord = await dbInstance.settings.get(STORAGE_KEYS.APP_CONFIG);
-            if (configRecord && configRecord.value && configRecord.value.selectedTemplateId === numId) {
-                const fallbackId = await resolveValidTemplateId(null, dbInstance);
-                configRecord.value.selectedTemplateId = fallbackId;
-                await dbInstance.settings.put(configRecord);
-            }
-        } catch {
-            // Non-critical settings cleanup
-        }
+        tables.push(dbInstance.settings);
     }
-    return true;
+
+    return await dbInstance.transaction(
+        DEXIE_TRANSACTION_MODE.READ_WRITE,
+        tables,
+        async () => {
+            const templateToDelete = await dbInstance.templates.get(numId);
+            if (!templateToDelete) {
+                return false;
+            }
+
+            const wasDefault = Boolean(templateToDelete.isDefault);
+            await dbInstance.templates.delete(numId);
+
+            if (wasDefault) {
+                const classic = await dbInstance.templates.where('name').equals(DEFAULT_BUILT_IN_TEMPLATE_NAME).first();
+                if (classic) {
+                    await dbInstance.templates.update(classic.id, { isDefault: true, updatedAt: new Date() });
+                } else {
+                    const firstRemaining = await dbInstance.templates.toCollection().first();
+                    if (firstRemaining) {
+                        await dbInstance.templates.update(firstRemaining.id, { isDefault: true, updatedAt: new Date() });
+                    }
+                }
+            }
+
+            if (dbInstance.settings) {
+                try {
+                    const configRecord = await dbInstance.settings.get(STORAGE_KEYS.APP_CONFIG);
+                    if (configRecord && configRecord.value && configRecord.value.selectedTemplateId === numId) {
+                        const fallbackTpl = await getDefaultTemplate(dbInstance);
+                        configRecord.value.selectedTemplateId = fallbackTpl?.id || null;
+                        await dbInstance.settings.put(configRecord);
+                    }
+                } catch {
+                    // Non-critical settings cleanup
+                }
+            }
+            return true;
+        }
+    );
 }
 
 export { renderInvoiceTemplate } from '../utils/templates.js';

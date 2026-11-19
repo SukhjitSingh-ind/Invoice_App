@@ -16,7 +16,9 @@ import {
     getDefaultTemplate,
     saveTemplateAsync,
     deleteTemplateAsync,
-    resolveValidTemplateId
+    resolveValidTemplateId,
+    validateTemplate,
+    setDefaultTemplateAsync
 } from './templateService.js';
 import {
     loadSettingsFromDb,
@@ -27,8 +29,8 @@ import {
     setSelectedTemplateId,
     getSelectedTemplateAsync
 } from './settingsService.js';
-import { exportFullBackup, importFullBackup } from './backupService.js';
-import { db } from '../db/db.js';
+import { exportFullBackup, importFullBackup, createFullBackupData } from './backupService.js';
+import { db, InvoiceAppDatabase } from '../db/db.js';
 
 console.log('Running Dexie v2 Template Migration, Seeding, Backup & Settings Regression Tests...');
 
@@ -521,6 +523,286 @@ async function runTests() {
     assert(invalidRestoreResult.success === true, 'Import with invalid selectedTemplateId succeeded');
     const settingsAfterInvalidRestore = getSettings();
     assert(settingsAfterInvalidRestore.selectedTemplateId === 501, 'Invalid selectedTemplateId was repaired to default template ID (501)');
+
+    // =========================================================================
+    // 8. TEMPLATE CONTENT VALIDATION TESTS (Finding 5)
+    // =========================================================================
+    console.log('\n--- 8. Testing Template Content Validation (Finding 5) ---');
+
+    let threwNull = false;
+    try {
+        validateTemplate(null);
+    } catch (e) {
+        threwNull = e instanceof TypeError;
+    }
+    assert(threwNull, 'validateTemplate throws TypeError for null');
+
+    let threwEmptyName = false;
+    try {
+        validateTemplate({ name: '   ', html: '<div></div>' });
+    } catch (e) {
+        threwEmptyName = e.message.includes('name is required');
+    }
+    assert(threwEmptyName, 'validateTemplate throws error for whitespace-only name');
+
+    let threwEmptyHtml = false;
+    try {
+        validateTemplate({ name: 'Clean Name', html: '   ' });
+    } catch (e) {
+        threwEmptyHtml = e.message.includes('HTML is required');
+    }
+    assert(threwEmptyHtml, 'validateTemplate throws error for whitespace-only HTML');
+
+    const sanitizedTpl = validateTemplate({
+        name: '  Modern Invoice  ',
+        html: '<div class="inv"></div>',
+        isDefault: 1,
+        isBuiltIn: 0
+    });
+    assert(sanitizedTpl.name === 'Modern Invoice', 'validateTemplate trims template name');
+    assert(sanitizedTpl.isDefault === true, 'validateTemplate coerces isDefault to boolean');
+    assert(sanitizedTpl.isBuiltIn === false, 'validateTemplate coerces isBuiltIn to boolean');
+    assert(sanitizedTpl.css === '', 'validateTemplate defaults missing css to empty string');
+
+    let saveRejected = false;
+    try {
+        await saveTemplateAsync({ name: 'No HTML' }, v2Db);
+    } catch {
+        saveRejected = true;
+    }
+    assert(saveRejected, 'saveTemplateAsync rejects invalid template without HTML');
+
+    // =========================================================================
+    // 9. DEFAULT TEMPLATE UNIQUENESS & SEEDING PROTECTION (Findings 1 & 4)
+    // =========================================================================
+    console.log('\n--- 9. Testing Default Template Uniqueness & Seeding Protection (Findings 1 & 4) ---');
+
+    const uniquenessDbName = 'TestUniquenessDB_' + Date.now();
+    const uDb = new Dexie(uniquenessDbName);
+    uDb.version(1).stores({
+        [TABLE_NAMES.TEMPLATES]: TEMPLATE_SCHEMA,
+        [TABLE_NAMES.SETTINGS]: 'key'
+    });
+    await uDb.open();
+
+    // 9.1 Insert a custom template marked as default before seeding
+    const customAlphaId = await saveTemplateAsync({
+        name: 'Custom Alpha',
+        html: '<div>alpha</div>',
+        css: '',
+        isDefault: true,
+        isBuiltIn: false
+    }, uDb);
+
+    // Seed built-in templates into uDb
+    await seedBuiltInTemplates(uDb);
+
+    const alphaAfterSeed = await uDb.table(TABLE_NAMES.TEMPLATES).get(customAlphaId);
+    assert(alphaAfterSeed.isDefault === true, 'Existing custom default is preserved during built-in template seeding');
+
+    const classicAfterSeed = await uDb.table(TABLE_NAMES.TEMPLATES).where('name').equals(DEFAULT_BUILT_IN_TEMPLATE_NAME).first();
+    assert(classicAfterSeed.isDefault === false, 'Classic is seeded with isDefault = false when another default already exists');
+
+    const defaultsCountAfterSeed = await uDb.table(TABLE_NAMES.TEMPLATES).filter(t => Boolean(t.isDefault)).count();
+    assert(defaultsCountAfterSeed === 1, 'Exactly one template in the database has isDefault = true after seeding');
+
+    // 9.2 Saving another template with isDefault = true automatically clears previous default
+    const customBetaId = await saveTemplateAsync({
+        name: 'Custom Beta',
+        html: '<div>beta</div>',
+        css: '',
+        isDefault: true,
+        isBuiltIn: false
+    }, uDb);
+
+    const betaRecord = await uDb.table(TABLE_NAMES.TEMPLATES).get(customBetaId);
+    const alphaRecordAfterBeta = await uDb.table(TABLE_NAMES.TEMPLATES).get(customAlphaId);
+    assert(betaRecord.isDefault === true, 'Custom Beta saved with isDefault = true');
+    assert(alphaRecordAfterBeta.isDefault === false, 'Custom Alpha isDefault cleared when Custom Beta became default');
+
+    const defaultsAfterBeta = await uDb.table(TABLE_NAMES.TEMPLATES).filter(t => Boolean(t.isDefault)).count();
+    assert(defaultsAfterBeta === 1, 'Exactly one template is default after saveTemplateAsync');
+
+    // 9.3 setDefaultTemplateAsync designates single default
+    await setDefaultTemplateAsync(classicAfterSeed.id, uDb);
+    const classicAfterSet = await uDb.table(TABLE_NAMES.TEMPLATES).get(classicAfterSeed.id);
+    const betaAfterSet = await uDb.table(TABLE_NAMES.TEMPLATES).get(customBetaId);
+    assert(classicAfterSet.isDefault === true, 'setDefaultTemplateAsync set Classic as default');
+    assert(betaAfterSet.isDefault === false, 'setDefaultTemplateAsync cleared isDefault on Custom Beta');
+
+    // 9.4 Reconcile multiple defaults if artificially created
+    await uDb.table(TABLE_NAMES.TEMPLATES).update(customBetaId, { isDefault: true });
+    const preReconcileDefaults = await uDb.table(TABLE_NAMES.TEMPLATES).filter(t => Boolean(t.isDefault)).count();
+    assert(preReconcileDefaults === 2, 'Artificially introduced dual defaults for reconciliation test');
+
+    await seedBuiltInTemplates(uDb);
+    const postReconcileDefaults = await uDb.table(TABLE_NAMES.TEMPLATES).filter(t => Boolean(t.isDefault)).count();
+    assert(postReconcileDefaults === 1, 'seedBuiltInTemplates successfully reconciled multiple defaults to exactly one');
+
+    await uDb.close();
+
+    // =========================================================================
+    // 10. BACKUP RESTORATION WITH NULL/MISSING SETTINGS (Finding 2)
+    // =========================================================================
+    console.log('\n--- 10. Testing Backup Restoration with Null Settings (Finding 2) ---');
+
+    // Set a distinct stale property in settings before restoring
+    await updateSettings({
+        payment: { upiId: 'stale-pre-restore@upi', payeeName: 'Stale Payee' }
+    });
+    const preRestoreSettings = getSettings();
+    assert(preRestoreSettings.payment.upiId === 'stale-pre-restore@upi', 'Stale UPI setting established before restore');
+
+    const nullSettingsBackup = {
+        type: STORAGE_KEYS.FULL_BACKUP_TYPE,
+        version: CURRENT_BACKUP_VERSION,
+        exportedAt: new Date().toISOString(),
+        data: {
+            invoices: [
+                { id: 801, number: 'INV-REST-01', IsGST: false, IsIGST: false, items: [], recipient: { name: 'Restored Co' } }
+            ],
+            clients: [],
+            items: [],
+            companies: [{ id: 'comp-restored', name: 'Restored Company', isDefault: true }],
+            templates: [
+                { id: 601, name: 'Restored Template', isDefault: true, isBuiltIn: false, html: '<div>R</div>', css: '' }
+            ],
+            settings: null // Explicitly null settings
+        }
+    };
+
+    const nullSettingsRestoreResult = await importFullBackup(JSON.stringify(nullSettingsBackup));
+    assert(nullSettingsRestoreResult.success === true, 'importFullBackup succeeded with settings: null');
+
+    const postNullRestoreSettings = getSettings();
+    assert(
+        postNullRestoreSettings.payment.upiId === '',
+        'Stale UPI setting from pre-restore dataset was wiped clean'
+    );
+    assert(
+        postNullRestoreSettings.activeProfileId === 'comp-restored',
+        'Restored sensible default settings assigned activeProfileId to restored company'
+    );
+    assert(
+        postNullRestoreSettings.selectedTemplateId === 601,
+        'Restored sensible default settings resolved selectedTemplateId to valid restored template (601)'
+    );
+
+    // =========================================================================
+    // 11. BACKUP SERIALIZATION AND DOWNLOAD FLAGS (Finding 3)
+    // =========================================================================
+    console.log('\n--- 11. Testing Backup Serialization & Download Flags (Finding 3) ---');
+
+    const backupDataPayload = await createFullBackupData(db);
+    assert(backupDataPayload.type === STORAGE_KEYS.FULL_BACKUP_TYPE, 'createFullBackupData returns valid backup type');
+    assert(Array.isArray(backupDataPayload.data.invoices), 'createFullBackupData contains invoices array');
+    assert(Array.isArray(backupDataPayload.data.templates), 'createFullBackupData contains templates array');
+    assert(backupDataPayload.data.settings !== undefined, 'createFullBackupData contains settings section');
+
+    const exportStatus = await exportFullBackup();
+    assert(exportStatus.success === true, 'exportFullBackup returns success: true');
+    assert(exportStatus.downloaded === false, 'exportFullBackup accurately reports downloaded = false in Node.js environment');
+    assert(exportStatus.backup !== undefined, 'exportFullBackup returns backup payload');
+
+    // =========================================================================
+    // 12. ATOMIC DELETION OF SELECTED AND DEFAULT TEMPLATES (Finding 6)
+    // =========================================================================
+    console.log('\n--- 12. Testing Atomic Deletion of Selected and Default Templates (Finding 6) ---');
+
+    const atomicDelDbName = 'TestAtomicDelDB_' + Date.now();
+    const aDb = new Dexie(atomicDelDbName);
+    aDb.version(1).stores({
+        [TABLE_NAMES.TEMPLATES]: TEMPLATE_SCHEMA,
+        [TABLE_NAMES.SETTINGS]: 'key'
+    });
+    await aDb.open();
+
+    const tpl1Id = await saveTemplateAsync({ name: 'Template 1', html: '<div>1</div>', isDefault: true }, aDb);
+    const tpl2Id = await saveTemplateAsync({ name: 'Template 2', html: '<div>2</div>', isDefault: false }, aDb);
+
+    await aDb.settings.put({
+        key: STORAGE_KEYS.APP_CONFIG,
+        value: { selectedTemplateId: tpl1Id }
+    });
+
+    // Delete tpl1 which is currently selected AND default
+    const delResult = await deleteTemplateAsync(tpl1Id, aDb);
+    assert(delResult === true, 'deleteTemplateAsync returned true');
+
+    const deletedTpl = await aDb.templates.get(tpl1Id);
+    assert(deletedTpl === undefined, 'Template 1 successfully deleted from templates store');
+
+    const atomicDelSettingsRecord = await aDb.settings.get(STORAGE_KEYS.APP_CONFIG);
+    assert(
+        atomicDelSettingsRecord.value.selectedTemplateId === tpl2Id,
+        'selectedTemplateId was atomically reassigned to fallback template (tpl2)'
+    );
+
+    const remainingTpl2 = await aDb.templates.get(tpl2Id);
+    assert(remainingTpl2.isDefault === true, 'Remaining template was atomically designated as default');
+
+    await aDb.close();
+
+    // =========================================================================
+    // 13. FULL INTEGRATION TEST OF APPLICATION INITIALIZATION ON V1 DB (Finding 7)
+    // =========================================================================
+    console.log('\n--- 13. Testing Application Initialization Integration on v1 Database (Finding 7) ---');
+
+    const integrationDbName = 'TestIntegrationInitDB_' + Date.now();
+    const v1IntegrationDb = new Dexie(integrationDbName);
+    v1IntegrationDb.version(1).stores({
+        [TABLE_NAMES.INVOICES]: 'id, number, date, IsGST, IsIGST, template, recipient.name, recipient.gstNumber',
+        [TABLE_NAMES.CLIENTS]: 'id, name, mobile, email, gstNumber, createdAt',
+        [TABLE_NAMES.ITEMS]: 'id, name, hsnSac, defaultPrice, createdAt',
+        [TABLE_NAMES.COMPANIES]: 'id, name, gstNumber, isDefault',
+        [TABLE_NAMES.SETTINGS]: 'key'
+    });
+    await v1IntegrationDb.open();
+
+    await v1IntegrationDb.table(TABLE_NAMES.INVOICES).add({
+        id: 'inv-init-v1',
+        number: 'INV-INIT-101',
+        date: '2026-02-01',
+        IsGST: true,
+        IsIGST: false,
+        template: 'classic',
+        recipient: { name: 'Integration Customer', gstNumber: '' }
+    });
+
+    await v1IntegrationDb.table(TABLE_NAMES.SETTINGS).put({
+        key: STORAGE_KEYS.APP_CONFIG,
+        value: {
+            validation: { requireInvoiceNumber: true },
+            display: { showLogo: true },
+            payment: { upiId: 'init@upi' },
+            activeProfileId: 'default'
+            // selectedTemplateId not present in v1
+        }
+    });
+
+    await v1IntegrationDb.close();
+
+    // Open through the actual InvoiceAppDatabase subclass with v2 schema
+    const v2IntegrationAppDb = new InvoiceAppDatabase(integrationDbName);
+    await v2IntegrationAppDb.open();
+
+    assert(v2IntegrationAppDb.verno === 2, 'InvoiceAppDatabase auto-upgraded existing v1 database to version 2');
+
+    // Run the actual template seeding flow on this migrated database
+    const integrationSeedResult = await seedBuiltInTemplates(v2IntegrationAppDb);
+    assert(integrationSeedResult.seededCount === 3, 'Seeded all 3 built-in templates into upgraded database');
+
+    const preservedInvoice = await v2IntegrationAppDb.invoices.get('inv-init-v1');
+    assert(preservedInvoice !== undefined && preservedInvoice.number === 'INV-INIT-101', 'Existing v1 invoice preserved intact');
+
+    const appConfigAfterUpgrade = await v2IntegrationAppDb.settings.get(STORAGE_KEYS.APP_CONFIG);
+    assert(appConfigAfterUpgrade.value.payment.upiId === 'init@upi', 'Existing v1 settings preserved intact');
+    assert(appConfigAfterUpgrade.value.selectedTemplateId !== undefined, 'selectedTemplateId populated during template seeding');
+
+    const activeTemplate = await v2IntegrationAppDb.templates.get(appConfigAfterUpgrade.value.selectedTemplateId);
+    assert(activeTemplate.name === DEFAULT_BUILT_IN_TEMPLATE_NAME, 'selectedTemplateId references seeded Classic template');
+
+    await v2IntegrationAppDb.close();
 
     console.log(`\nTests Completed: ${passed} Passed, ${failed} Failed`);
     if (failed > 0) process.exit(1);
