@@ -59,12 +59,18 @@ export async function seedBuiltInTemplates(dbInstance = db) {
                 let defaultAssignedDuringSeeding = hasExistingDefault;
 
                 for (const def of BUILT_IN_TEMPLATES) {
-                    const existingByName = await dbInstance.templates.where('name').equals(def.name).first();
-                    const existingByKey = !existingByName && def.key
-                        ? await dbInstance.templates.filter(t => t.key === def.key).first()
-                        : null;
+                    let existing = null;
+                    if (def.key) {
+                        existing = await dbInstance.templates.filter(t => t.key === def.key).first();
+                    }
 
-                    const existing = existingByName || existingByKey;
+                    if (!existing) {
+                        // Check for legacy record by name, but ONLY if it is not explicitly a user-created template
+                        const legacyByName = await dbInstance.templates.where('name').equals(def.name).first();
+                        if (legacyByName && legacyByName.isBuiltIn !== false) {
+                            existing = legacyByName;
+                        }
+                    }
 
                     if (existing) {
                         existingCount++;
@@ -72,7 +78,7 @@ export async function seedBuiltInTemplates(dbInstance = db) {
                         if (!existing.key && def.key) {
                             updates.key = def.key;
                         }
-                        if (existing.isBuiltIn === undefined) {
+                        if (existing.isBuiltIn !== true) {
                             updates.isBuiltIn = true;
                         }
                         if (Object.keys(updates).length > 0) {

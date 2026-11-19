@@ -82,9 +82,10 @@ function parseBoolean(val) {
  * Uses strictly one agreed property name per data concept with no legacy aliases.
  *
  * @param {string|object} input - Raw JSON string or parsed object
+ * @param {Array<object>} [availableTemplates=null] - Available built-in and custom templates
  * @returns {import('../types/jsonInvoice').ParseResult}
  */
-export function parseAndValidateInvoiceJson(input) {
+export function parseAndValidateInvoiceJson(input, availableTemplates = null) {
     const errors = [];
     const warnings = [];
 
@@ -215,8 +216,14 @@ export function parseAndValidateInvoiceJson(input) {
         rawTemplateId = safeString(rawTemplate);
         if (rawTemplateId) {
             hasTemplate = true;
-            if (isValidTemplateId(rawTemplateId)) {
-                template = rawTemplateId;
+            if (isValidTemplateId(rawTemplateId, availableTemplates)) {
+                const strId = String(rawTemplateId).trim();
+                const matched = (Array.isArray(availableTemplates) ? availableTemplates : []).find(
+                    (t) => String(t.id) === strId || (t.key && String(t.key) === strId)
+                ) || TEMPLATES.find(
+                    (t) => String(t.id) === strId || (t.key && String(t.key) === strId)
+                );
+                template = matched ? matched.id : rawTemplateId;
             } else {
                 warnings.push(
                     `Template "${rawTemplateId}" is not a recognized template ID. Default template will be used.`

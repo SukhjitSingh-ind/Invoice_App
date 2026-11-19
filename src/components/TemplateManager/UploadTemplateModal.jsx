@@ -43,6 +43,9 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
     const { addToast } = useToast();
     const fileInputRef = useRef(null);
     const activeReadIdRef = useRef(0);
+    const abortControllerRef = useRef(null);
+    const modalRef = useRef(null);
+    const previousActiveElementRef = useRef(null);
 
     const [file, setFile] = useState(null);
     const [rawHtml, setRawHtml] = useState('');
@@ -56,6 +59,11 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
 
     useEffect(() => {
         if (!isOpen) {
+            activeReadIdRef.current++;
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+                abortControllerRef.current = null;
+            }
             setFile(null);
             setRawHtml('');
             setTemplateName('');
@@ -68,14 +76,74 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
     }, [isOpen]);
 
     useEffect(() => {
-        if (!isOpen) return;
-        const handleKeyDown = (e) => {
-            if (e.key === 'Escape') {
-                onClose();
+        const activeId = activeReadIdRef;
+        const controller = abortControllerRef;
+        return () => {
+            activeId.current++;
+            if (controller.current) {
+                controller.current.abort();
+                controller.current = null;
             }
         };
+    }, []);
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        previousActiveElementRef.current = document.activeElement;
+
+        const timer = setTimeout(() => {
+            if (modalRef.current) {
+                const focusable = modalRef.current.querySelectorAll(
+                    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                );
+                if (focusable.length > 0) {
+                    focusable[0].focus();
+                }
+            }
+        }, 50);
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                onClose();
+                return;
+            }
+
+            if (e.key === 'Tab' && modalRef.current) {
+                const focusable = Array.from(modalRef.current.querySelectorAll(
+                    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                ));
+                if (focusable.length === 0) {
+                    e.preventDefault();
+                    return;
+                }
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+
+                if (e.shiftKey) {
+                    if (document.activeElement === first || !modalRef.current.contains(document.activeElement)) {
+                        e.preventDefault();
+                        last.focus();
+                    }
+                } else {
+                    if (document.activeElement === last || !modalRef.current.contains(document.activeElement)) {
+                        e.preventDefault();
+                        first.focus();
+                    }
+                }
+            }
+        };
+
         window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener('keydown', handleKeyDown);
+            if (previousActiveElementRef.current && typeof previousActiveElementRef.current.focus === 'function') {
+                previousActiveElementRef.current.focus();
+            }
+        };
     }, [isOpen, onClose]);
 
     const tokenAnalysis = useMemo(() => {
@@ -94,6 +162,12 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
     }, [rawHtml]);
 
     const handleFileProcess = async (selectedFile) => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
         const readId = ++activeReadIdRef.current;
         setFileError(null);
         setNameError(null);
@@ -110,8 +184,8 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
         setIsReading(true);
 
         try {
-            const content = await readTemplateFileAsync(selectedFile);
-            if (activeReadIdRef.current !== readId) {
+            const content = await readTemplateFileAsync(selectedFile, { signal: controller.signal });
+            if (activeReadIdRef.current !== readId || controller.signal.aborted) {
                 return;
             }
 
@@ -133,8 +207,10 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
                 }
             }
         } catch (err) {
-            if (activeReadIdRef.current === readId) {
-                setFileError(err.message || 'An error occurred while reading the file. Please try again.');
+            if (activeReadIdRef.current === readId && !controller.signal.aborted) {
+                if (err.name !== 'AbortError' && err.message !== 'File reading was aborted.') {
+                    setFileError(err.message || 'An error occurred while reading the file. Please try again.');
+                }
                 setRawHtml('');
             }
         } finally {
@@ -182,6 +258,12 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
     };
 
     const handleReset = () => {
+        activeReadIdRef.current++;
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setIsReading(false);
         setFile(null);
         setRawHtml('');
         setTemplateName('');
@@ -235,6 +317,7 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div
+                ref={modalRef}
                 className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
                 role="dialog"
                 aria-modal="true"

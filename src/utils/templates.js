@@ -8,7 +8,7 @@ import {
 } from '../constants/index.js';
 import { calculateInvoiceTotals } from './invoiceCalculations.js';
 import { numberToWords } from './numberToWords.js';
-import { sanitizeCss, sanitizeInlineStyle } from './cssSanitizer.js';
+import { sanitizeCss, sanitizeInlineStyle, isSafeUrl } from './cssSanitizer.js';
 
 export const TEMPLATES = [
     {
@@ -139,7 +139,7 @@ const TOKEN_REGEX = /\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g;
 export const DEFAULT_DOMPURIFY_CONFIG = Object.freeze({
     ADD_TAGS: Object.freeze(['style']),
     ADD_ATTR: Object.freeze(['target']),
-    FORBID_TAGS: Object.freeze(['script', 'iframe', 'object', 'embed', 'base']),
+    FORBID_TAGS: Object.freeze(['script', 'iframe', 'object', 'embed', 'base', 'link', 'form']),
     FORBID_ATTR: Object.freeze(['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur'])
 });
 
@@ -193,13 +193,55 @@ export function registerSanitizationHooks(purifyInstance) {
     });
 
     purifyInstance.addHook('uponSanitizeAttribute', (node, data) => {
-        if (data.attrName === 'style') {
-            const rawStyle = data.attrValue || '';
-            const sanitized = sanitizeInlineStyle(rawStyle);
+        const attr = data.attrName.toLowerCase();
+        const val = (data.attrValue || '').trim();
+
+        if (attr === 'style') {
+            const sanitized = sanitizeInlineStyle(val, { allowExternalUrls: false });
             if (!sanitized) {
                 data.keepAttr = false;
             } else {
                 data.attrValue = sanitized;
+            }
+            return;
+        }
+
+        // Strict resource loading policy: forbid external HTTP/HTTPS and protocol-relative URLs on resource attributes
+        if (attr === 'src' || attr === 'poster' || attr === 'background' || attr === 'action' || attr === 'formaction' || attr === 'data') {
+            if (!isSafeUrl(val, { allowExternalUrls: false })) {
+                data.keepAttr = false;
+            }
+            return;
+        }
+
+        if (attr === 'srcset') {
+            const candidates = val.split(',').map(s => s.trim()).filter(Boolean);
+            const allSafe = candidates.length > 0 && candidates.every(candidate => {
+                const urlPart = candidate.split(/\s+/)[0];
+                return isSafeUrl(urlPart, { allowExternalUrls: false });
+            });
+            if (!allSafe) {
+                data.keepAttr = false;
+            }
+            return;
+        }
+
+        if (attr === 'href' || attr === 'xlink:href') {
+            const tag = (data.tagName || (node && node.tagName) || '').toLowerCase();
+            const isResourceTag = tag === 'image' || tag === 'use' || tag === 'link';
+            if (isResourceTag) {
+                if (!isSafeUrl(val, { allowExternalUrls: false })) {
+                    data.keepAttr = false;
+                }
+            } else {
+                // For non-resource tags such as hyperlinks (<a>), allow web URLs (HTTP, HTTPS, relative paths, anchors, mailto, tel)
+                // but forbid dangerous schemes (javascript:, vbscript:, data:) and injection delimiters
+                if (!isSafeUrl(val, { allowExternalUrls: true })) {
+                    const isSafeNav = /^mailto:[^\s?#]+(\?[^\s#]*)?$/i.test(val) || /^tel:[+0-9\s()-]+$/i.test(val);
+                    if (!isSafeNav) {
+                        data.keepAttr = false;
+                    }
+                }
             }
         }
     });

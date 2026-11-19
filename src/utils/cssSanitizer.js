@@ -167,13 +167,13 @@ export function decodeCssEscapes(str) {
  *
  * @param {string} rawUrl
  * @param {object} [options={}]
- * @param {boolean} [options.allowExternalUrls=true]
+ * @param {boolean} [options.allowExternalUrls=false]
  * @returns {boolean} True if the URL satisfies the safety policy
  */
 export function isSafeUrl(rawUrl, options = {}) {
     if (!rawUrl || typeof rawUrl !== 'string') return false;
 
-    const { allowExternalUrls = true } = options;
+    const { allowExternalUrls = false } = options;
 
     // Decode any CSS escape sequences in the URL string
     const unescaped = decodeCssEscapes(rawUrl);
@@ -420,7 +420,7 @@ function sanitizeStyleSheetAst(ast, options = {}) {
  *
  * @param {string} cssText - Raw CSS stylesheet string
  * @param {object} [options={}] - Sanitizer options
- * @param {boolean} [options.allowExternalUrls=true] - Whether to allow http:/https: URLs
+ * @param {boolean} [options.allowExternalUrls=false] - Whether to allow http:/https: URLs
  * @returns {string} Sanitized CSS string, or empty string if unsafe/malformed
  */
 export function sanitizeCss(cssText, options = {}) {
@@ -434,7 +434,7 @@ export function sanitizeCss(cssText, options = {}) {
             parseCustomProperty: true
         });
 
-        sanitizeStyleSheetAst(ast, options);
+        sanitizeStyleSheetAst(ast, { allowExternalUrls: false, ...options });
 
         if (!ast.children || ast.children.isEmpty) {
             return '';
@@ -452,7 +452,7 @@ export function sanitizeCss(cssText, options = {}) {
  *
  * @param {string} styleText - Raw inline style declaration list
  * @param {object} [options={}] - Sanitizer options
- * @param {boolean} [options.allowExternalUrls=true] - Whether to allow http:/https: URLs
+ * @param {boolean} [options.allowExternalUrls=false] - Whether to allow http:/https: URLs
  * @returns {string} Sanitized CSS declaration list string, or empty string if unsafe/malformed
  */
 export function sanitizeInlineStyle(styleText, options = {}) {
@@ -466,7 +466,7 @@ export function sanitizeInlineStyle(styleText, options = {}) {
             parseCustomProperty: true
         });
 
-        sanitizeDeclarationListAst(ast, options);
+        sanitizeDeclarationListAst(ast, { allowExternalUrls: false, ...options });
 
         if (!ast.children || ast.children.isEmpty) {
             return '';

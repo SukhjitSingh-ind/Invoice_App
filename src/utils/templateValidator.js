@@ -261,7 +261,12 @@ export function validateTemplateFile(file) {
     };
 }
 
-export async function readTemplateFileAsync(file) {
+export async function readTemplateFileAsync(file, options = {}) {
+    const { signal } = options || {};
+    if (signal?.aborted) {
+        throw new Error('File reading was aborted.');
+    }
+
     const fileCheck = validateTemplateFile(file);
     if (!fileCheck.valid) {
         throw new Error(fileCheck.error);
@@ -271,7 +276,26 @@ export async function readTemplateFileAsync(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
 
+            const onAbortSignal = () => {
+                try {
+                    reader.abort();
+                } catch {
+                    // Ignore abort errors
+                }
+            };
+
+            if (signal) {
+                signal.addEventListener('abort', onAbortSignal, { once: true });
+            }
+
             reader.onload = () => {
+                if (signal) {
+                    signal.removeEventListener('abort', onAbortSignal);
+                }
+                if (signal?.aborted) {
+                    reject(new Error('File reading was aborted.'));
+                    return;
+                }
                 const result = reader.result;
                 if (typeof result === 'string') {
                     resolve(result);
@@ -281,10 +305,16 @@ export async function readTemplateFileAsync(file) {
             };
 
             reader.onerror = () => {
+                if (signal) {
+                    signal.removeEventListener('abort', onAbortSignal);
+                }
                 reject(new Error(reader.error ? reader.error.message : 'Error occurred while reading the file.'));
             };
 
             reader.onabort = () => {
+                if (signal) {
+                    signal.removeEventListener('abort', onAbortSignal);
+                }
                 reject(new Error('File reading was aborted.'));
             };
 
@@ -293,6 +323,9 @@ export async function readTemplateFileAsync(file) {
     }
 
     if (file && typeof file.text === 'function') {
+        if (signal?.aborted) {
+            throw new Error('File reading was aborted.');
+        }
         return await file.text();
     }
 

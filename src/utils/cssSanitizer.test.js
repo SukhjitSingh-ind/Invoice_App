@@ -149,8 +149,10 @@ assert(!isSafeUrl("https://example.com/'bad'"), 'Blocks URL containing single qu
 assert(!isSafeUrl('https://example.com/\\\\bad'), 'Blocks URL containing backslash delimiter');
 
 // Safe web URLs & Relative paths
-assert(isSafeUrl('https://example.com/images/logo.png'), 'Allows legitimate HTTPS URL');
-assert(isSafeUrl('http://example.com/images/logo.png'), 'Allows legitimate HTTP URL');
+assert(!isSafeUrl('https://example.com/images/logo.png'), 'Blocks external HTTPS URL by default (allowExternalUrls defaults to false)');
+assert(isSafeUrl('https://example.com/images/logo.png', { allowExternalUrls: true }), 'Allows legitimate HTTPS URL when allowExternalUrls is true');
+assert(!isSafeUrl('http://example.com/images/logo.png'), 'Blocks external HTTP URL by default (allowExternalUrls defaults to false)');
+assert(isSafeUrl('http://example.com/images/logo.png', { allowExternalUrls: true }), 'Allows legitimate HTTP URL when allowExternalUrls is true');
 assert(isSafeUrl('/assets/images/logo.png'), 'Allows safe relative path');
 assert(isSafeUrl('images/watermark.png'), 'Allows relative filename');
 assert(isSafeUrl('#company-logo-clip'), 'Allows local fragment identifier');
@@ -163,7 +165,7 @@ assert(isSafeUrl(safeBase64Png, { allowExternalUrls: false }), 'Still allows loc
 // Protocol-Relative URLs (Finding 2)
 assert(!isSafeUrl('//evil.example/image.png', { allowExternalUrls: false }), 'Rejects protocol-relative URL when allowExternalUrls is false');
 assert(isSafeUrl('//evil.example/image.png', { allowExternalUrls: true }), 'Accepts protocol-relative URL when allowExternalUrls is true');
-assert(isSafeUrl('//evil.example/image.png'), 'Accepts protocol-relative URL by default when allowExternalUrls is omitted');
+assert(!isSafeUrl('//evil.example/image.png'), 'Rejects protocol-relative URL by default when allowExternalUrls is omitted');
 assert(!isSafeUrl('//evil.example/<script>', { allowExternalUrls: true }), 'Rejects protocol-relative URL containing HTML tag delimiter <');
 assert(!isSafeUrl('//evil.example/"onerror=alert(1)', { allowExternalUrls: true }), 'Rejects protocol-relative URL containing double quote delimiter');
 assert(!isSafeUrl("//evil.example/'bad'", { allowExternalUrls: true }), 'Rejects protocol-relative URL containing single quote delimiter');

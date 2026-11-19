@@ -579,5 +579,87 @@ const legacyUrl2 = simulateUrlTransition('template=corporate&gst=false');
 assert(!legacyUrl2.includes('IsGST'), 'gst=false does not set IsGST=true');
 assert(!legacyUrl2.includes('gst='), 'Removed legacy gst=false parameter');
 
+// ==========================================
+// 9. CUSTOM TEMPLATE JSON IMPORT TESTS (Finding 2)
+// ==========================================
+
+console.log('\nRunning Custom Template JSON Import Resolution Tests...');
+
+const customSelectableTemplates = [
+    { id: 'classic', key: 'classic', name: 'Classic' },
+    { id: 'modern_indigo', key: 'modern_indigo', name: 'Modern' },
+    { id: 101, key: 'custom_101', name: 'Emerald Custom Invoice', isCustom: true },
+    { id: 'custom_202', key: 'custom_202', name: 'Sapphire Custom Invoice', isCustom: true }
+];
+
+// Test 9.1: parseAndValidateInvoiceJson preserves numeric custom template ID when availableTemplates provided
+const customNumericJson = JSON.stringify({
+    invoiceNumber: 'INV-CUSTOM-1',
+    template: 101,
+    items: [{ description: 'Item 1', price: 500 }]
+});
+const customNumericResult = parseAndValidateInvoiceJson(customNumericJson, customSelectableTemplates);
+assert(customNumericResult.success === true, 'JSON with custom numeric template parses successfully');
+assert(customNumericResult.hasTemplate === true, 'hasTemplate is true for valid custom template');
+assert(customNumericResult.extractedInvoice.template === 101, 'Numeric custom template ID is preserved');
+assert(customNumericResult.warnings.length === 0, 'No warning emitted for valid custom template');
+
+// Test 9.2: parseAndValidateInvoiceJson matches stringified numeric ID and normalizes to canonical template id
+const customStringNumJson = JSON.stringify({
+    invoiceNumber: 'INV-CUSTOM-2',
+    template: '101',
+    items: [{ description: 'Item 1', price: 500 }]
+});
+const customStringNumResult = parseAndValidateInvoiceJson(customStringNumJson, customSelectableTemplates);
+assert(customStringNumResult.success === true, 'JSON with stringified custom template ID parses successfully');
+assert(customStringNumResult.extractedInvoice.template === 101, 'Stringified custom ID resolves to canonical template id');
+assert(customStringNumResult.warnings.length === 0, 'No warning emitted for stringified custom ID');
+
+// Test 9.3: parseAndValidateInvoiceJson matches template by key and returns canonical template id
+const customKeyJson = JSON.stringify({
+    invoiceNumber: 'INV-CUSTOM-3',
+    template: 'custom_101',
+    items: [{ description: 'Item 1', price: 500 }]
+});
+const customKeyResult = parseAndValidateInvoiceJson(customKeyJson, customSelectableTemplates);
+assert(customKeyResult.success === true, 'JSON with template key parses successfully');
+assert(customKeyResult.extractedInvoice.template === 101, 'Template key resolves to canonical template id');
+assert(customKeyResult.warnings.length === 0, 'No warning emitted for template key match');
+
+// Test 9.4: parseAndValidateInvoiceJson matches string custom template ID
+const customStringIdJson = JSON.stringify({
+    invoiceNumber: 'INV-CUSTOM-4',
+    template: 'custom_202',
+    items: [{ description: 'Item 1', price: 500 }]
+});
+const customStringIdResult = parseAndValidateInvoiceJson(customStringIdJson, customSelectableTemplates);
+assert(customStringIdResult.success === true, 'JSON with string custom ID parses successfully');
+assert(customStringIdResult.extractedInvoice.template === 'custom_202', 'String custom ID is preserved');
+
+// Test 9.5: parseAndValidateInvoiceJson rejects non-existent custom template and leaves template undefined with warning
+const invalidCustomJson = JSON.stringify({
+    invoiceNumber: 'INV-CUSTOM-5',
+    template: 99999,
+    items: [{ description: 'Item 1', price: 500 }]
+});
+const invalidCustomResult = parseAndValidateInvoiceJson(invalidCustomJson, customSelectableTemplates);
+assert(invalidCustomResult.success === true, 'JSON with invalid template parses');
+assert(invalidCustomResult.hasTemplate === true, 'hasTemplate reflects presence of template property in JSON');
+assert(invalidCustomResult.extractedInvoice.template === undefined, 'Nonexistent template ID leaves extracted template undefined');
+assert(invalidCustomResult.warnings.length === 1, 'Warning emitted for nonexistent template ID');
+
+const resolvedInvalidCustom = resolveInvoiceData({
+    extractedData: invalidCustomResult.extractedInvoice,
+    availableTemplates: customSelectableTemplates
+});
+assert(resolvedInvalidCustom.invoice.template === 'default', 'Nonexistent template ID falls back to default in resolveInvoiceData');
+
+// Test 9.6: resolveInvoiceData preserves custom template ID through complete workflow
+const resolvedCustomInvoice = resolveInvoiceData({
+    extractedData: customNumericResult.extractedInvoice,
+    availableTemplates: customSelectableTemplates
+});
+assert(resolvedCustomInvoice.invoice.template === 101, 'resolveInvoiceData preserves custom template ID');
+
 console.log(`\nTests Completed: ${passed} Passed, ${failed} Failed`);
 if (failed > 0) process.exit(1);

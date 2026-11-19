@@ -150,6 +150,41 @@ async function runTests() {
         assert(err.message.includes('aborted'), 'readTemplateFileAsync handles FileReader onabort');
     }
 
+    // Testing AbortController signal with readTemplateFileAsync (Finding 4)
+    const preAbortedController = new AbortController();
+    preAbortedController.abort();
+    try {
+        await readTemplateFileAsync({ name: 'preaborted.html', size: 100 }, { signal: preAbortedController.signal });
+        assert(false, 'readTemplateFileAsync should reject immediately with pre-aborted signal');
+    } catch (err) {
+        assert(err.message.includes('aborted'), 'readTemplateFileAsync rejects when pre-aborted signal is passed');
+    }
+
+    // Mock FileReader supporting manual abort call via signal
+    let readerAbortCalled = false;
+    class MockSignalAbortFileReader {
+        abort() {
+            readerAbortCalled = true;
+            if (typeof this.onabort === 'function') {
+                this.onabort();
+            }
+        }
+        readAsText() {
+            // Wait for external abort
+        }
+    }
+    globalThis.FileReader = MockSignalAbortFileReader;
+    const midFlightController = new AbortController();
+    const midFlightPromise = readTemplateFileAsync({ name: 'midflight.html', size: 100 }, { signal: midFlightController.signal });
+    midFlightController.abort();
+    try {
+        await midFlightPromise;
+        assert(false, 'readTemplateFileAsync should reject when signal is aborted mid-flight');
+    } catch (err) {
+        assert(readerAbortCalled === true, 'readTemplateFileAsync invoked reader.abort() on abort signal');
+        assert(err.message.includes('aborted'), 'readTemplateFileAsync rejects with abort error on mid-flight abort');
+    }
+
     // Restore original FileReader
     if (savedFileReader) {
         globalThis.FileReader = savedFileReader;
