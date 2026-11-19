@@ -21,25 +21,71 @@ import * as csstree from 'css-tree';
    ========================================================================= */
 
 /**
- * Safe CSS at-rules permitted in invoice templates.
+ * Module-private set of safe CSS at-rules permitted in invoice templates.
  * All other at-rules (e.g. @import, @charset, @namespace, @font-face, @document, @scope) are rejected.
  */
-export const ALLOWED_AT_RULES = Object.freeze(new Set([
+const ALLOWED_AT_RULES_SET = new Set([
     'media',
     'page',
     'supports',
     'keyframes',
     '-webkit-keyframes'
-]));
+]);
 
 /**
- * Dangerous CSS properties that permit external script or binary code execution in legacy or modern browsers.
+ * Module-private set of dangerous CSS properties that permit external script or binary code execution in legacy or modern browsers.
  */
-export const FORBIDDEN_PROPERTIES = Object.freeze(new Set([
+const FORBIDDEN_PROPERTIES_SET = new Set([
     'behavior',
     '-ms-behavior',
     '-moz-binding'
-]));
+]);
+
+/**
+ * Read-only list of safe CSS at-rules permitted in invoice templates.
+ * Deeply immutable: Object.freeze() on an Array prevents adding, removing, or modifying entries.
+ */
+export const ALLOWED_AT_RULES = Object.freeze([
+    'media',
+    'page',
+    'supports',
+    'keyframes',
+    '-webkit-keyframes'
+]);
+
+/**
+ * Read-only list of dangerous CSS properties that permit external script or binary code execution in browsers.
+ * Deeply immutable: Object.freeze() on an Array prevents adding, removing, or modifying entries.
+ */
+export const FORBIDDEN_PROPERTIES = Object.freeze([
+    'behavior',
+    '-ms-behavior',
+    '-moz-binding'
+]);
+
+/**
+ * Determines whether a CSS at-rule is permitted under the security policy.
+ * Safely accepts at-rule names with or without leading '@'.
+ *
+ * @param {string} atRuleName - The CSS at-rule identifier (e.g. 'media' or '@media')
+ * @returns {boolean} True if the at-rule is allowed
+ */
+export function isAllowedAtRule(atRuleName) {
+    if (!atRuleName || typeof atRuleName !== 'string') return false;
+    const normalized = atRuleName.startsWith('@') ? atRuleName.slice(1).toLowerCase() : atRuleName.toLowerCase();
+    return ALLOWED_AT_RULES_SET.has(normalized);
+}
+
+/**
+ * Determines whether a CSS property name is forbidden under the security policy.
+ *
+ * @param {string} propName - The CSS property name (e.g. 'behavior')
+ * @returns {boolean} True if the property is forbidden
+ */
+export function isForbiddenProperty(propName) {
+    if (!propName || typeof propName !== 'string') return false;
+    return FORBIDDEN_PROPERTIES_SET.has(propName.toLowerCase());
+}
 
 /**
  * Strict regex for safe raster image data URIs (PNG, JPEG, GIF, WEBP) base64-encoded only.
@@ -132,6 +178,14 @@ export function isSafeUrl(rawUrl, options = {}) {
     // Decode any CSS escape sequences in the URL string
     const unescaped = decodeCssEscapes(rawUrl);
 
+    // Reject URLs containing null bytes or non-whitespace ASCII control characters
+    for (let i = 0; i < unescaped.length; i++) {
+        const code = unescaped.charCodeAt(i);
+        if (code === 0 || (code < 32 && code !== 9 && code !== 10 && code !== 13) || code === 127) {
+            return false;
+        }
+    }
+
     // Strip surrounding whitespace and ASCII control characters (0x00-0x1F, 0x7F)
     const cleanUrl = stripControlAndWhitespace(unescaped);
     if (!cleanUrl) return false;
@@ -141,10 +195,17 @@ export function isSafeUrl(rawUrl, options = {}) {
         return false;
     }
 
+    // Check for protocol-relative URLs (e.g. "//evil.example/tracker.png")
+    // Protocol-relative URLs resolve to external hosts using the current page's protocol.
+    // They must be treated as external URLs and respect the allowExternalUrls policy.
+    if (cleanUrl.startsWith('//')) {
+        return Boolean(allowExternalUrls);
+    }
+
     // Identify URL scheme
     const schemeMatch = cleanUrl.match(/^([a-z0-9+.-]+):/i);
     if (!schemeMatch) {
-        // Relative URL or fragment (e.g. /images/logo.png, #anchor)
+        // Relative URL or fragment (e.g. /images/logo.png, images/logo.png, ../images/logo.png, #anchor)
         // Guard against scheme tricks with embedded whitespace (e.g. "java script:")
         if (/^[a-z0-9+.-]+[\s]*:/i.test(unescaped)) {
             return false;
@@ -194,7 +255,7 @@ function isDangerousDeclaration(node, options = {}) {
 
     // Normalize property name
     const propName = csstree.ident.decode(node.property).toLowerCase();
-    if (FORBIDDEN_PROPERTIES.has(propName) || propName.includes('expression')) {
+    if (isForbiddenProperty(propName) || propName.includes('expression')) {
         return true;
     }
 
@@ -313,7 +374,7 @@ function sanitizeStyleSheetAst(ast, options = {}) {
 
             if (node.type === 'Atrule') {
                 const atRuleName = csstree.ident.decode(node.name).toLowerCase();
-                if (!ALLOWED_AT_RULES.has(atRuleName)) {
+                if (!isAllowedAtRule(atRuleName)) {
                     if (list && item) list.remove(item);
                     return;
                 }

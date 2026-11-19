@@ -4,7 +4,9 @@ import {
     isSafeUrl,
     decodeCssEscapes,
     ALLOWED_AT_RULES,
-    FORBIDDEN_PROPERTIES
+    FORBIDDEN_PROPERTIES,
+    isAllowedAtRule,
+    isForbiddenProperty
 } from './cssSanitizer.js';
 
 console.log('Running CSS Sanitizer & Security Policy Tests...');
@@ -23,20 +25,81 @@ function assert(condition, message) {
 }
 
 // =========================================================================
-// 1. CONSTANTS & POLICY CONFIGURATION TESTS
+// 1. CONSTANTS, LOOKUP FUNCTIONS & IMMUTABILITY TESTS
 // =========================================================================
-console.log('\n--- 1. Testing Policy Constants & Immutability ---');
+console.log('\n--- 1. Testing Policy Constants, Lookup Functions & Immutability ---');
 
-assert(ALLOWED_AT_RULES instanceof Set && ALLOWED_AT_RULES.has('media'), 'ALLOWED_AT_RULES includes media');
-assert(ALLOWED_AT_RULES.has('page'), 'ALLOWED_AT_RULES includes page');
-assert(ALLOWED_AT_RULES.has('supports'), 'ALLOWED_AT_RULES includes supports');
-assert(!ALLOWED_AT_RULES.has('import'), 'ALLOWED_AT_RULES excludes import');
-assert(!ALLOWED_AT_RULES.has('font-face'), 'ALLOWED_AT_RULES excludes font-face');
-assert(Object.isFrozen(ALLOWED_AT_RULES), 'ALLOWED_AT_RULES is immutable');
+// Immutability of ALLOWED_AT_RULES
+assert(Array.isArray(ALLOWED_AT_RULES), 'ALLOWED_AT_RULES is an Array');
+assert(Object.isFrozen(ALLOWED_AT_RULES), 'ALLOWED_AT_RULES is deeply frozen with Object.freeze');
+assert(ALLOWED_AT_RULES.includes('media'), 'ALLOWED_AT_RULES includes media');
+assert(ALLOWED_AT_RULES.includes('page'), 'ALLOWED_AT_RULES includes page');
+assert(ALLOWED_AT_RULES.includes('supports'), 'ALLOWED_AT_RULES includes supports');
+assert(ALLOWED_AT_RULES.includes('keyframes'), 'ALLOWED_AT_RULES includes keyframes');
+assert(ALLOWED_AT_RULES.includes('-webkit-keyframes'), 'ALLOWED_AT_RULES includes -webkit-keyframes');
+assert(!ALLOWED_AT_RULES.includes('import'), 'ALLOWED_AT_RULES excludes import');
+assert(!ALLOWED_AT_RULES.includes('font-face'), 'ALLOWED_AT_RULES excludes font-face');
+assert(ALLOWED_AT_RULES.add === undefined, 'ALLOWED_AT_RULES does not expose mutable .add() method');
 
-assert(FORBIDDEN_PROPERTIES instanceof Set && FORBIDDEN_PROPERTIES.has('behavior'), 'FORBIDDEN_PROPERTIES includes behavior');
-assert(FORBIDDEN_PROPERTIES.has('-moz-binding'), 'FORBIDDEN_PROPERTIES includes -moz-binding');
-assert(Object.isFrozen(FORBIDDEN_PROPERTIES), 'FORBIDDEN_PROPERTIES is immutable');
+let atRulesPushMutated = false;
+try {
+    ALLOWED_AT_RULES.push('import');
+    atRulesPushMutated = true;
+} catch {
+    atRulesPushMutated = false;
+}
+assert(!atRulesPushMutated, 'ALLOWED_AT_RULES cannot be mutated via push()');
+
+let atRulesIndexMutated = false;
+try {
+    ALLOWED_AT_RULES[0] = 'import';
+    atRulesIndexMutated = ALLOWED_AT_RULES[0] === 'import';
+} catch {
+    atRulesIndexMutated = false;
+}
+assert(!atRulesIndexMutated, 'ALLOWED_AT_RULES cannot be mutated via index assignment');
+
+// isAllowedAtRule lookup function
+assert(isAllowedAtRule('media'), 'isAllowedAtRule permits "media"');
+assert(isAllowedAtRule('@media'), 'isAllowedAtRule permits "@media" with leading @');
+assert(isAllowedAtRule('page'), 'isAllowedAtRule permits "page"');
+assert(isAllowedAtRule('@page'), 'isAllowedAtRule permits "@page"');
+assert(isAllowedAtRule('supports'), 'isAllowedAtRule permits "supports"');
+assert(isAllowedAtRule('keyframes'), 'isAllowedAtRule permits "keyframes"');
+assert(isAllowedAtRule('-webkit-keyframes'), 'isAllowedAtRule permits "-webkit-keyframes"');
+assert(!isAllowedAtRule('import'), 'isAllowedAtRule rejects "import"');
+assert(!isAllowedAtRule('@import'), 'isAllowedAtRule rejects "@import"');
+assert(!isAllowedAtRule('font-face'), 'isAllowedAtRule rejects "font-face"');
+assert(!isAllowedAtRule('charset'), 'isAllowedAtRule rejects "charset"');
+assert(!isAllowedAtRule(null), 'isAllowedAtRule handles null safely');
+assert(!isAllowedAtRule(''), 'isAllowedAtRule handles empty string safely');
+
+// Immutability of FORBIDDEN_PROPERTIES
+assert(Array.isArray(FORBIDDEN_PROPERTIES), 'FORBIDDEN_PROPERTIES is an Array');
+assert(Object.isFrozen(FORBIDDEN_PROPERTIES), 'FORBIDDEN_PROPERTIES is deeply frozen with Object.freeze');
+assert(FORBIDDEN_PROPERTIES.includes('behavior'), 'FORBIDDEN_PROPERTIES includes behavior');
+assert(FORBIDDEN_PROPERTIES.includes('-ms-behavior'), 'FORBIDDEN_PROPERTIES includes -ms-behavior');
+assert(FORBIDDEN_PROPERTIES.includes('-moz-binding'), 'FORBIDDEN_PROPERTIES includes -moz-binding');
+assert(FORBIDDEN_PROPERTIES.add === undefined, 'FORBIDDEN_PROPERTIES does not expose mutable .add() method');
+
+let forbiddenPropsPushMutated = false;
+try {
+    FORBIDDEN_PROPERTIES.push('color');
+    forbiddenPropsPushMutated = true;
+} catch {
+    forbiddenPropsPushMutated = false;
+}
+assert(!forbiddenPropsPushMutated, 'FORBIDDEN_PROPERTIES cannot be mutated via push()');
+
+// isForbiddenProperty lookup function
+assert(isForbiddenProperty('behavior'), 'isForbiddenProperty flags "behavior"');
+assert(isForbiddenProperty('BEHAVIOR'), 'isForbiddenProperty is case-insensitive for "BEHAVIOR"');
+assert(isForbiddenProperty('-ms-behavior'), 'isForbiddenProperty flags "-ms-behavior"');
+assert(isForbiddenProperty('-moz-binding'), 'isForbiddenProperty flags "-moz-binding"');
+assert(!isForbiddenProperty('color'), 'isForbiddenProperty permits "color"');
+assert(!isForbiddenProperty('width'), 'isForbiddenProperty permits "width"');
+assert(!isForbiddenProperty(null), 'isForbiddenProperty handles null safely');
+assert(!isForbiddenProperty(''), 'isForbiddenProperty handles empty string safely');
 
 // =========================================================================
 // 2. CSS ESCAPE DECODING TESTS
@@ -94,7 +157,32 @@ assert(isSafeUrl('#company-logo-clip'), 'Allows local fragment identifier');
 
 // External URL disabling option
 assert(!isSafeUrl('https://example.com/logo.png', { allowExternalUrls: false }), 'Disallows external HTTPS URL when allowExternalUrls is false');
+assert(isSafeUrl('https://example.com/logo.png', { allowExternalUrls: true }), 'Allows external HTTPS URL when allowExternalUrls is true');
 assert(isSafeUrl(safeBase64Png, { allowExternalUrls: false }), 'Still allows local data URI when allowExternalUrls is false');
+
+// Protocol-Relative URLs (Finding 2)
+assert(!isSafeUrl('//evil.example/image.png', { allowExternalUrls: false }), 'Rejects protocol-relative URL when allowExternalUrls is false');
+assert(isSafeUrl('//evil.example/image.png', { allowExternalUrls: true }), 'Accepts protocol-relative URL when allowExternalUrls is true');
+assert(isSafeUrl('//evil.example/image.png'), 'Accepts protocol-relative URL by default when allowExternalUrls is omitted');
+assert(!isSafeUrl('//evil.example/<script>', { allowExternalUrls: true }), 'Rejects protocol-relative URL containing HTML tag delimiter <');
+assert(!isSafeUrl('//evil.example/"onerror=alert(1)', { allowExternalUrls: true }), 'Rejects protocol-relative URL containing double quote delimiter');
+assert(!isSafeUrl("//evil.example/'bad'", { allowExternalUrls: true }), 'Rejects protocol-relative URL containing single quote delimiter');
+assert(!isSafeUrl('//evil.example/\\\\bad', { allowExternalUrls: true }), 'Rejects protocol-relative URL containing backslash delimiter');
+assert(!isSafeUrl('//evil.example/`bad`', { allowExternalUrls: true }), 'Rejects protocol-relative URL containing backtick delimiter');
+assert(!isSafeUrl('//evil.example/{bad}', { allowExternalUrls: true }), 'Rejects protocol-relative URL containing curly brace delimiter');
+assert(!isSafeUrl('//evil.example/\0bad', { allowExternalUrls: true }), 'Rejects protocol-relative URL containing null byte');
+assert(!isSafeUrl('\\2f \\2f evil.example/image.png', { allowExternalUrls: false }), 'Rejects CSS-escaped protocol-relative URL when allowExternalUrls is false');
+assert(!isSafeUrl('/\t/evil.example/image.png', { allowExternalUrls: false }), 'Rejects protocol-relative URL with tab control character when allowExternalUrls is false');
+
+// Legitimate relative/local paths with allowExternalUrls: false
+assert(isSafeUrl('/images/logo.png', { allowExternalUrls: false }), 'Permits root-relative path /images/logo.png when allowExternalUrls is false');
+assert(isSafeUrl('images/logo.png', { allowExternalUrls: false }), 'Permits document-relative path images/logo.png when allowExternalUrls is false');
+assert(isSafeUrl('../images/logo.png', { allowExternalUrls: false }), 'Permits directory traversal path ../images/logo.png when allowExternalUrls is false');
+assert(isSafeUrl('#company-logo-clip', { allowExternalUrls: false }), 'Permits local fragment anchor when allowExternalUrls is false');
+
+// Dangerous schemes must be rejected regardless of allowExternalUrls setting
+assert(!isSafeUrl('javascript:alert(1)', { allowExternalUrls: false }), 'Rejects javascript: when allowExternalUrls is false');
+assert(!isSafeUrl('javascript:alert(1)', { allowExternalUrls: true }), 'Rejects javascript: when allowExternalUrls is true');
 
 // =========================================================================
 // 4. STYLESHEET SANITIZATION (sanitizeCss) TESTS
@@ -180,6 +268,16 @@ const safeImgCss = `.logo { background-image: url("${safeBase64Png}"); color: #2
 const safeImgResult = sanitizeCss(safeImgCss);
 assert(safeImgResult.includes('background-image:url(data:image/png;base64,'), 'Safe base64 raster image URL preserved in stylesheet');
 
+// Protocol-relative URLs in stylesheet
+const protoRelExternalBlocked = sanitizeCss('div { background: url("//evil.example/tracker.png"); color: red; }', { allowExternalUrls: false });
+assert(protoRelExternalBlocked === 'div{color:red}', 'Strips protocol-relative URL when allowExternalUrls is false in stylesheet');
+
+const protoRelExternalAllowed = sanitizeCss('div { background: url("//evil.example/tracker.png"); }', { allowExternalUrls: true });
+assert(protoRelExternalAllowed.includes('//evil.example/tracker.png'), 'Preserves protocol-relative URL when allowExternalUrls is true in stylesheet');
+
+const rootRelAllowed = sanitizeCss('div { background: url("/images/logo.png"); }', { allowExternalUrls: false });
+assert(rootRelAllowed.includes('/images/logo.png'), 'Preserves root-relative URL when allowExternalUrls is false in stylesheet');
+
 // Malformed CSS and syntax error handling
 const malformedEmptyCss = 'div { color: ; background: url( }';
 assert(sanitizeCss(malformedEmptyCss) === '', 'Malformed empty declarations and broken URL fail safely');
@@ -212,6 +310,16 @@ assert(validInlineResult === 'margin:20px;font-weight:bold;color:#1a365d', 'Pres
 const safeDataInline = `background-image: url("${safeBase64Png}"); color: blue;`;
 const safeDataInlineResult = sanitizeInlineStyle(safeDataInline);
 assert(safeDataInlineResult.includes('background-image:url(data:image/png;base64,'), 'Preserves safe data URI in inline style');
+
+// Protocol-relative URLs in inline style
+const inlineProtoRelBlocked = sanitizeInlineStyle('background: url("//evil.example/tracker.png"); color: red;', { allowExternalUrls: false });
+assert(inlineProtoRelBlocked === 'color:red', 'Strips protocol-relative URL in inline style when allowExternalUrls is false');
+
+const inlineProtoRelAllowed = sanitizeInlineStyle('background: url("//evil.example/tracker.png");', { allowExternalUrls: true });
+assert(inlineProtoRelAllowed.includes('//evil.example/tracker.png'), 'Preserves protocol-relative URL in inline style when allowExternalUrls is true');
+
+const inlineRootRelAllowed = sanitizeInlineStyle('background: url("/images/logo.png"); color: red;', { allowExternalUrls: false });
+assert(inlineRootRelAllowed === 'background:url(/images/logo.png);color:red', 'Preserves root-relative URL in inline style when allowExternalUrls is false');
 
 const malformedInline = 'color: ; bad declaration;';
 assert(sanitizeInlineStyle(malformedInline) === '', 'Malformed inline style fails safely');
