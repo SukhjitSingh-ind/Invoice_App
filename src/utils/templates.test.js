@@ -2,7 +2,15 @@ import { createRequire } from 'module';
 import {
     TEMPLATES,
     getTemplateById,
-    renderInvoiceTemplate
+    renderInvoiceTemplate,
+    DEFAULT_DOMPURIFY_CONFIG,
+    WHOLE_DOCUMENT_PURIFY_CONFIG,
+    FRAGMENT_PURIFY_CONFIG,
+    registerSanitizationHooks,
+    getPurifyInstance,
+    isCompleteHtmlDocument,
+    sanitizeHtml,
+    resetPurifyInstanceForTesting
 } from './templates.js';
 import {
     BUILT_IN_TEMPLATES
@@ -264,14 +272,43 @@ assert(linkResult.includes('href="https://example.com"'), 'Legitimate HTTPS URL 
 // Layout CSS preservation
 const styleTemplate = '<style>.invoice { color: #2b6cb0; font-weight: bold; }</style><div class="invoice" style="margin: 20px;">Tax Invoice</div>';
 const styleResult = renderInvoiceTemplate(styleTemplate, {});
-assert(styleResult.includes('<style>.invoice { color: #2b6cb0; font-weight: bold; }</style>'), 'Supported <style> element is preserved');
-assert(styleResult.includes('style="margin: 20px;"'), 'Supported inline style attribute is preserved');
+assert(styleResult.includes('<style>') && styleResult.includes('.invoice') && styleResult.includes('color:#2b6cb0'), 'Supported <style> element is preserved and canonicalized');
+assert(styleResult.includes('style="margin:20px"'), 'Supported inline style attribute is preserved and canonicalized');
 
 // Malicious CSS in style tag
 const badStyleTemplate = '<style>body { background: url("javascript:alert(1)"); }</style><div>Clean</div>';
 const badStyleResult = renderInvoiceTemplate(badStyleTemplate, {});
 assert(!badStyleResult.includes('javascript:alert(1)'), 'Unsafe CSS expression in <style> is stripped');
 assert(!badStyleResult.includes('<style>'), 'Malicious <style> tag completely removed by sanitization hook');
+
+// CSS @import in style tag
+const importStyleTemplate = '<style>@import url("https://evil.com/leak.css"); .safe-rule { font-size: 14px; }</style><div>Body</div>';
+const importStyleResult = renderInvoiceTemplate(importStyleTemplate, {});
+assert(!importStyleResult.includes('@import'), '@import rule stripped from <style> element');
+assert(importStyleResult.includes('.safe-rule{font-size:14px}'), 'Safe rule in same <style> element is preserved');
+
+// CSS expression with casing and escape sequences
+const exprStyleTemplate = '<style>body { width: exp\\72 ession(alert(1)); } .valid { color: green; }</style><div>Body</div>';
+const exprStyleResult = renderInvoiceTemplate(exprStyleTemplate, {});
+assert(!exprStyleResult.includes('expression'), 'CSS expression with escapes stripped');
+assert(exprStyleResult.includes('.valid{color:green}'), 'Safe rule preserved alongside stripped expression');
+
+// Inline style sanitization with dangerous javascript:
+const inlineJsTemplate = '<div style="color: blue; background: url(jav\\61 script:alert(1));">Text</div>';
+const inlineJsResult = renderInvoiceTemplate(inlineJsTemplate, {});
+assert(!inlineJsResult.includes('javascript'), 'Inline style javascript: URL stripped');
+assert(inlineJsResult.includes('style="color:blue"'), 'Inline style safe declarations preserved');
+
+// Inline style with only dangerous declarations removed completely
+const inlineOnlyBadTemplate = '<div style="behavior: url(bad.htc); width: expression(alert(1));">Text</div>';
+const inlineOnlyBadResult = renderInvoiceTemplate(inlineOnlyBadTemplate, {});
+assert(!inlineOnlyBadResult.includes('style='), 'Entire style attribute removed when all declarations are unsafe');
+
+// Safe raster data URI in inline style
+const inlineDataTemplate = '<div style="background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY44YAAAAASUVORK5CYII=); font-size: 12px;">Text</div>';
+const inlineDataResult = renderInvoiceTemplate(inlineDataTemplate, {});
+assert(inlineDataResult.includes('background-image:url(data:image/png;base64,'), 'Safe base64 raster image data URI preserved in inline style');
+assert(inlineDataResult.includes('font-size:12px'), 'Safe declaration preserved alongside safe data URI');
 
 // Malicious injection through scalar value
 const injectScalarData = { clientName: '<img src="x" onerror="alert(1)">' };
@@ -289,6 +326,123 @@ assert(foundScripts.length === 0, 'DOM inspection confirms zero script elements 
 const eventAuditDom = new JSDOM(handlerResult);
 const foundButtons = eventAuditDom.window.document.querySelectorAll('button');
 assert(foundButtons.length === 1 && !foundButtons[0].hasAttribute('onclick'), 'DOM inspection confirms event handlers removed from element');
+
+// =========================================================================
+// 5.1 CENTRALIZED DOMPURIFY CONFIGURATION & HOOK ARCHITECTURE TESTS
+// =========================================================================
+console.log('\n--- 5.1. Testing Centralized DOMPurify Configuration & Hooks ---');
+
+// Immutability of base configuration
+assert(Object.isFrozen(DEFAULT_DOMPURIFY_CONFIG), 'DEFAULT_DOMPURIFY_CONFIG is immutable (frozen)');
+assert(Object.isFrozen(DEFAULT_DOMPURIFY_CONFIG.ADD_TAGS), 'DEFAULT_DOMPURIFY_CONFIG.ADD_TAGS is immutable');
+assert(Object.isFrozen(DEFAULT_DOMPURIFY_CONFIG.ADD_ATTR), 'DEFAULT_DOMPURIFY_CONFIG.ADD_ATTR is immutable');
+assert(Object.isFrozen(DEFAULT_DOMPURIFY_CONFIG.FORBID_TAGS), 'DEFAULT_DOMPURIFY_CONFIG.FORBID_TAGS is immutable');
+assert(Object.isFrozen(DEFAULT_DOMPURIFY_CONFIG.FORBID_ATTR), 'DEFAULT_DOMPURIFY_CONFIG.FORBID_ATTR is immutable');
+assert(DEFAULT_DOMPURIFY_CONFIG.ADD_TAGS.includes('style'), 'Base configuration permits <style> tag');
+assert(DEFAULT_DOMPURIFY_CONFIG.ADD_ATTR.includes('target'), 'Base configuration permits target attribute');
+assert(DEFAULT_DOMPURIFY_CONFIG.FORBID_TAGS.includes('script'), 'Base configuration forbids <script> tag');
+assert(DEFAULT_DOMPURIFY_CONFIG.FORBID_TAGS.includes('iframe'), 'Base configuration forbids <iframe> tag');
+assert(DEFAULT_DOMPURIFY_CONFIG.FORBID_ATTR.includes('onerror'), 'Base configuration forbids onerror attribute');
+assert(DEFAULT_DOMPURIFY_CONFIG.FORBID_ATTR.includes('onclick'), 'Base configuration forbids onclick attribute');
+
+// Derived configurations
+assert(Object.isFrozen(WHOLE_DOCUMENT_PURIFY_CONFIG), 'WHOLE_DOCUMENT_PURIFY_CONFIG is immutable');
+assert(WHOLE_DOCUMENT_PURIFY_CONFIG.WHOLE_DOCUMENT === true, 'WHOLE_DOCUMENT_PURIFY_CONFIG sets WHOLE_DOCUMENT to true');
+assert(Object.isFrozen(FRAGMENT_PURIFY_CONFIG), 'FRAGMENT_PURIFY_CONFIG is immutable');
+assert(FRAGMENT_PURIFY_CONFIG.WHOLE_DOCUMENT === false, 'FRAGMENT_PURIFY_CONFIG sets WHOLE_DOCUMENT to false');
+assert(WHOLE_DOCUMENT_PURIFY_CONFIG.ADD_TAGS === DEFAULT_DOMPURIFY_CONFIG.ADD_TAGS, 'Derived whole doc config reuses centralized ADD_TAGS');
+assert(FRAGMENT_PURIFY_CONFIG.ADD_TAGS === DEFAULT_DOMPURIFY_CONFIG.ADD_TAGS, 'Derived fragment config reuses centralized ADD_TAGS');
+
+// Document vs fragment detection
+assert(isCompleteHtmlDocument('<!DOCTYPE html><html><body><h1>Invoice</h1></body></html>'), 'Detects DOCTYPE as complete document');
+assert(isCompleteHtmlDocument('<html><head></head><body><h1>Invoice</h1></body></html>'), 'Detects <html> tag as complete document');
+assert(isCompleteHtmlDocument('<HTML><BODY>Tax Invoice</BODY></HTML>'), 'Detects uppercase <HTML> tag as complete document');
+assert(!isCompleteHtmlDocument('<div>Just a fragment</div>'), 'Non-document markup detected as fragment');
+assert(!isCompleteHtmlDocument('<style>.a{color:red}</style><div>Fragment with style</div>'), 'Fragment with <style> detected as fragment');
+assert(!isCompleteHtmlDocument(''), 'Empty string is not a complete document');
+assert(!isCompleteHtmlDocument(null), 'Null is not a complete document');
+assert(!isCompleteHtmlDocument(undefined), 'Undefined is not a complete document');
+
+// Hook registration idempotency
+const purifyInstance1 = getPurifyInstance();
+const purifyInstance2 = getPurifyInstance();
+assert(purifyInstance1 === purifyInstance2, 'getPurifyInstance returns cached singleton instance');
+
+// Repeated hook registration on the same instance is idempotent
+registerSanitizationHooks(purifyInstance1);
+registerSanitizationHooks(purifyInstance1);
+assert(true, 'Repeated registerSanitizationHooks calls complete without error or hook duplication');
+
+// Reset and re-initialization
+resetPurifyInstanceForTesting();
+const freshPurifyInstance = getPurifyInstance();
+assert(freshPurifyInstance && typeof freshPurifyInstance.sanitize === 'function', 'getPurifyInstance re-initializes cleanly after reset');
+
+// Consistent security behavior: Full Document sanitization
+const fullDocMalicious = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Tax Invoice</title>
+  <style>
+    body { background: url("javascript:alert('xss')"); }
+    .title { color: #1a365d; font-size: 24px; }
+  </style>
+  <script>evilCode()</script>
+</head>
+<body>
+  <h1 class="title" style="margin: 10px; width: expression(alert(1));">Invoice</h1>
+  <button onclick="steal()">Pay</button>
+</body>
+</html>`;
+
+const fullDocResult = sanitizeHtml(fullDocMalicious);
+assert(!fullDocResult.includes('evilCode()'), 'Full document sanitization removes script blocks');
+assert(!fullDocResult.includes('<script>'), 'Full document sanitization removes <script> elements');
+assert(!fullDocResult.includes('onclick'), 'Full document sanitization removes event handler attributes');
+assert(!fullDocResult.includes('javascript:alert'), 'Full document sanitization neutralizes unsafe CSS in <style>');
+assert(!fullDocResult.includes('expression'), 'Full document sanitization neutralizes unsafe inline expression');
+assert(fullDocResult.includes('.title{color:#1a365d;font-size:24px}'), 'Full document sanitization preserves legitimate CSS rules');
+assert(fullDocResult.includes('style="margin:10px"'), 'Full document sanitization preserves legitimate inline styles');
+assert(fullDocResult.includes('<title>Tax Invoice</title>'), 'Full document sanitization preserves document head structure');
+
+// Consistent security behavior: Fragment sanitization
+const fragMalicious = `<style>
+  body { background: url("javascript:alert('xss')"); }
+  .title { color: #1a365d; font-size: 24px; }
+</style>
+<script>evilCode()</script>
+<h1 class="title" style="margin: 10px; width: expression(alert(1));">Invoice</h1>
+<button onclick="steal()">Pay</button>`;
+
+const fragResult = sanitizeHtml(fragMalicious);
+assert(!fragResult.includes('evilCode()'), 'Fragment sanitization removes script blocks');
+assert(!fragResult.includes('<script>'), 'Fragment sanitization removes <script> elements');
+assert(!fragResult.includes('onclick'), 'Fragment sanitization removes event handler attributes');
+assert(!fragResult.includes('javascript:alert'), 'Fragment sanitization neutralizes unsafe CSS in <style>');
+assert(!fragResult.includes('expression'), 'Fragment sanitization neutralizes unsafe inline expression');
+assert(fragResult.includes('<style>.title{color:#1a365d;font-size:24px}</style>'), 'Fragment sanitization preserves legitimate CSS rules');
+assert(fragResult.includes('style="margin:10px"'), 'Fragment sanitization preserves legitimate inline styles');
+assert(!fragResult.includes('<html>'), 'Fragment sanitization does not wrap output in full document HTML tags');
+assert(!fragResult.includes('<body>'), 'Fragment sanitization does not wrap output in body tags');
+
+// Explicit option overrides
+const forcedDocOutput = sanitizeHtml('<div>Simple Fragment</div>', { wholeDocument: true });
+assert(forcedDocOutput.includes('<html>') && forcedDocOutput.includes('<div>Simple Fragment</div>'), 'options.wholeDocument: true forces full document output');
+
+const forcedFragOutput = sanitizeHtml('<!DOCTYPE html><html><body><div>Simple Document</div></body></html>', { wholeDocument: false });
+assert(!forcedFragOutput.includes('<!DOCTYPE') && !forcedFragOutput.includes('<html>') && forcedFragOutput.includes('<div>Simple Document</div>'), 'options.wholeDocument: false forces fragment output');
+
+// Determinism & repeated execution consistency
+const repeat1 = sanitizeHtml(fragMalicious);
+const repeat2 = sanitizeHtml(fragMalicious);
+assert(repeat1 === repeat2, 'Repeated sanitization calls produce identical output deterministically');
+
+// Safe fallback for null, undefined, empty, and non-string inputs
+assert(sanitizeHtml(null) === '', 'sanitizeHtml(null) safely returns empty string');
+assert(sanitizeHtml(undefined) === '', 'sanitizeHtml(undefined) safely returns empty string');
+assert(sanitizeHtml('') === '', 'sanitizeHtml("") safely returns empty string');
+assert(sanitizeHtml(9999) === '', 'sanitizeHtml(number) safely returns empty string');
+assert(sanitizeHtml({ bad: 'input' }) === '', 'sanitizeHtml(object) safely returns empty string');
 
 // =========================================================================
 // 6. BUILT-IN TEMPLATES RENDERING TESTS

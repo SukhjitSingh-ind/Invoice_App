@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "css-tree": "^3.2.1",
     "dexie": "^4.4.7",
     "dexie-react-hooks": "^4.4.0",
     "dompurify": "^3.4.18",

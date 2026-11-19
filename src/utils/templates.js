@@ -8,6 +8,7 @@ import {
 } from '../constants/index.js';
 import { calculateInvoiceTotals } from './invoiceCalculations.js';
 import { numberToWords } from './numberToWords.js';
+import { sanitizeCss, sanitizeInlineStyle } from './cssSanitizer.js';
 
 export const TEMPLATES = [
     {
@@ -93,8 +94,81 @@ export const getTemplateById = (id) => TEMPLATES.find(t => t.id === id) || TEMPL
 const BLOCK_REGEX = /\{\{#([a-zA-Z0-9_]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g;
 const TOKEN_REGEX = /\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g;
 
+/**
+ * Centralized, immutable base DOMPurify configuration for invoice templates and HTML sanitization.
+ * Defines the canonical allowed and forbidden tags/attributes across both full documents and fragments.
+ */
+export const DEFAULT_DOMPURIFY_CONFIG = Object.freeze({
+    ADD_TAGS: Object.freeze(['style']),
+    ADD_ATTR: Object.freeze(['target']),
+    FORBID_TAGS: Object.freeze(['script', 'iframe', 'object', 'embed', 'base']),
+    FORBID_ATTR: Object.freeze(['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur'])
+});
+
+/**
+ * Pre-configured immutable DOMPurify configuration for complete HTML documents.
+ */
+export const WHOLE_DOCUMENT_PURIFY_CONFIG = Object.freeze({
+    ...DEFAULT_DOMPURIFY_CONFIG,
+    WHOLE_DOCUMENT: true
+});
+
+/**
+ * Pre-configured immutable DOMPurify configuration for HTML fragments.
+ */
+export const FRAGMENT_PURIFY_CONFIG = Object.freeze({
+    ...DEFAULT_DOMPURIFY_CONFIG,
+    WHOLE_DOCUMENT: false
+});
+
 let cachedDomWindow = null;
 let cachedPurify = null;
+const configuredPurifyInstances = new WeakSet();
+
+/**
+ * Registers centralized sanitization hooks onto a DOMPurify instance idempotently.
+ * Attaches AST-based CSS sanitizers for `<style>` elements and `style` attributes.
+ * Guards against duplicate hook accumulation across repeated calls.
+ *
+ * @param {import('dompurify').DOMPurifyI} purifyInstance
+ * @returns {import('dompurify').DOMPurifyI}
+ */
+export function registerSanitizationHooks(purifyInstance) {
+    if (!purifyInstance || typeof purifyInstance.addHook !== 'function') {
+        return purifyInstance;
+    }
+
+    if (configuredPurifyInstances.has(purifyInstance)) {
+        return purifyInstance;
+    }
+
+    purifyInstance.addHook('uponSanitizeElement', (node, data) => {
+        if (data.tagName === 'style') {
+            const content = node.textContent || '';
+            const sanitized = sanitizeCss(content);
+            if (!sanitized) {
+                node.remove();
+            } else {
+                node.textContent = sanitized;
+            }
+        }
+    });
+
+    purifyInstance.addHook('uponSanitizeAttribute', (node, data) => {
+        if (data.attrName === 'style') {
+            const rawStyle = data.attrValue || '';
+            const sanitized = sanitizeInlineStyle(rawStyle);
+            if (!sanitized) {
+                data.keepAttr = false;
+            } else {
+                data.attrValue = sanitized;
+            }
+        }
+    });
+
+    configuredPurifyInstances.add(purifyInstance);
+    return purifyInstance;
+}
 
 /**
  * Resolves Node's require function dynamically in server/test environments without static module imports.
@@ -102,8 +176,8 @@ let cachedPurify = null;
  */
 function getNodeRequire() {
     try {
-        if (typeof process !== 'undefined' && typeof process.getBuiltinModule === 'function') {
-            const mod = process.getBuiltinModule('module');
+        if (typeof globalThis.process !== 'undefined' && typeof globalThis.process.getBuiltinModule === 'function') {
+            const mod = globalThis.process.getBuiltinModule('module');
             if (mod && typeof mod.createRequire === 'function') {
                 return mod.createRequire(import.meta.url);
             }
@@ -143,9 +217,11 @@ function getDomWindow() {
 
 /**
  * Obtains an initialized DOMPurify instance compatible with current runtime.
+ * Integrates AST-based CSS sanitization hooks for `<style>` blocks and `style` attributes.
+ *
  * @returns {import('dompurify').DOMPurifyI}
  */
-function getPurifyInstance() {
+export function getPurifyInstance() {
     if (cachedPurify) return cachedPurify;
     const domWindow = getDomWindow();
     if (domWindow) {
@@ -156,18 +232,16 @@ function getPurifyInstance() {
         cachedPurify = DOMPurify;
     }
 
-    if (cachedPurify && typeof cachedPurify.addHook === 'function') {
-        cachedPurify.addHook('uponSanitizeElement', (node, data) => {
-            if (data.tagName === 'style') {
-                const content = node.textContent || '';
-                if (/expression\s*\(|javascript:|behavior:|vbscript:|@import/i.test(content)) {
-                    node.remove();
-                }
-            }
-        });
-    }
-
+    registerSanitizationHooks(cachedPurify);
     return cachedPurify;
+}
+
+/**
+ * Resets cached DOMPurify and Window instances for isolated test environments.
+ */
+export function resetPurifyInstanceForTesting() {
+    cachedPurify = null;
+    cachedDomWindow = null;
 }
 
 /**
@@ -189,38 +263,45 @@ function createDocumentFromHtml(html) {
 }
 
 /**
- * Sanitizes generated HTML using DOMPurify, preserving layout styles and removing scripts/event-handlers.
+ * Detects whether an HTML string represents a complete document (contains DOCTYPE or <html> tags).
+ *
  * @param {string} html
- * @returns {string}
+ * @returns {boolean}
  */
-function sanitizeHtml(html) {
+export function isCompleteHtmlDocument(html) {
+    if (!html || typeof html !== 'string') return false;
+    return /<!DOCTYPE\b/i.test(html) || /<\s*html\b/i.test(html);
+}
+
+/**
+ * Sanitizes HTML using centralized DOMPurify configuration and hooks.
+ * Both complete documents and HTML fragments use the same centralized security rules.
+ * Preserves layout styles while stripping unsafe scripts, styles, and event-handlers.
+ *
+ * @param {string} html - HTML string to sanitize
+ * @param {object} [options={}] - Sanitization options
+ * @param {boolean} [options.wholeDocument] - Override auto-detection for whole document vs fragment mode
+ * @returns {string} Sanitized markup string
+ */
+export function sanitizeHtml(html, options = {}) {
     if (!html || typeof html !== 'string') return '';
     const purify = getPurifyInstance();
 
-    const isWholeDoc = /<!DOCTYPE\b/i.test(html) || /<\s*html\b/i.test(html);
+    const isWholeDoc = options.wholeDocument !== undefined
+        ? Boolean(options.wholeDocument)
+        : isCompleteHtmlDocument(html);
 
-    const purifyConfig = {
-        ADD_TAGS: ['style'],
-        ADD_ATTR: ['target'],
-        FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'base'],
-        FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur'],
-        WHOLE_DOCUMENT: true
-    };
-
-    const sanitized = purify.sanitize(html, purifyConfig);
+    // Sanitize with full-document configuration to ensure <style> tags and head structures are preserved
+    const sanitized = purify.sanitize(html, WHOLE_DOCUMENT_PURIFY_CONFIG);
 
     if (isWholeDoc) {
         return sanitized;
     }
 
+    // For HTML fragments, extract <style> blocks and body markup cleanly
     const doc = createDocumentFromHtml(sanitized);
     if (!doc) {
-        return purify.sanitize(html, {
-            ADD_TAGS: ['style'],
-            ADD_ATTR: ['target'],
-            FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'base'],
-            FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur']
-        });
+        return purify.sanitize(html, FRAGMENT_PURIFY_CONFIG);
     }
 
     const styles = Array.from(doc.head.querySelectorAll('style'))
@@ -622,3 +703,6 @@ export function renderInvoiceTemplate(htmlString, invoiceData) {
     // 3. Sanitize final HTML using DOMPurify
     return sanitizeHtml(renderedScalars);
 }
+
+export { sanitizeCss, sanitizeInlineStyle } from './cssSanitizer.js';
+
