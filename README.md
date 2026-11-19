@@ -137,11 +137,12 @@ invoice-app/
 │   │   └── settings.ts     # Configuration and profile types
 │   ├── utils/              # Pure computational helpers & tests
 │   │   ├── clientHelpers.js        # Pagination & search filtering
+│   │   ├── cssSanitizer.js         # AST-based CSS sanitization engine (css-tree)
 │   │   ├── idGenerator.js          # RFC 4122 v4 UUID generator
 │   │   ├── invoiceCalculations.js  # Subtotal, tax, discount formulas
 │   │   ├── jsonInvoiceParser.js    # JSON invoice validation and normalization
 │   │   ├── numberToWords.js        # Indian currency numbering converter
-│   │   ├── templates.js            # Template styling configurations
+│   │   ├── templates.js            # Template styling configurations & token engine
 │   │   └── validation.ts           # GSTIN, phone, and email validators
 │   ├── App.jsx             # Route definitions & lazy code-splitting
 │   ├── index.css           # Tailwind base styles and font imports
@@ -223,6 +224,18 @@ The application ships with three built-in templates automatically seeded into In
 - **Minimal**: High-efficiency, print-optimized monochromatic layout with clean whitespace.
 
 Seeding runs idempotently inside an atomic Dexie transaction during application initialization without overwriting user customizations or existing records.
+
+### Template Token Engine & CSS Sanitization Security Policy
+The application provides an enterprise-grade HTML/CSS template rendering pipeline via `renderInvoiceTemplate`:
+- **Token Interpolation**: Replaces `{{sender.*}}`, `{{recipient.*}}`, `{{totals.*}}`, and `{{#items}}...{{/items}}` repeating line-item blocks with HTML-escaped data.
+- **AST-Based CSS Sanitization**: Powered by `css-tree`, replacing legacy regular expressions with full Abstract Syntax Tree parsing and reconstruction.
+- **Security Boundaries**:
+  - **At-Rules Allowlist**: Strictly permits `@media`, `@page`, `@supports`, and `@keyframes`; completely strips `@import`, `@font-face`, `@charset`, `@namespace`, and other unapproved at-rules.
+  - **Property & Function Defense**: Prohibits `behavior`, `-moz-binding`, and `expression(...)` constructs, including casing variations and CSS escape sequences (`\6a avascript`, `exp\72 ession`).
+  - **URL Sanitization (`isSafeUrl`)**: Disallows `javascript:`, `vbscript:`, `file:`, `blob:`, `about:`, `data:text/html`, and `data:image/svg+xml`. Only safe raster image base64 data URIs (`png`, `jpeg`, `gif`, `webp`), valid HTTPS/HTTP URLs, and local relative paths are accepted.
+  - **Dual Sanitization Surface**: Integrated into DOMPurify via `uponSanitizeElement` (for `<style>` blocks) and `uponSanitizeAttribute` (for inline `style="..."` attributes).
+  - **Centralized Configuration & Hooks**: Defines canonical immutable rules in `DEFAULT_DOMPURIFY_CONFIG` (`WHOLE_DOCUMENT_PURIFY_CONFIG` and `FRAGMENT_PURIFY_CONFIG`), registered idempotently via `registerSanitizationHooks` to prevent duplicate hook accumulation or policy divergence between fragments and full documents.
+  - **Fail-Safe Fallback**: Malformed, truncated, or unparseable CSS syntax automatically fails closed to prevent bypasses. Empty rules and empty style blocks are pruned cleanly.
 
 ### Automatic Startup Migration
 When the application loads, `AppBootstrap` runs `initializeDatabaseAndMigrate()`:

@@ -56,6 +56,7 @@ flowchart TD
         NumToWords["numberToWords.js"]
         Validators["validation.ts"]
         TemplatesRegistry["templates.js"]
+        CssSanitizer["cssSanitizer.js"]
         IdGen["idGenerator.js"]
     end
 
@@ -604,6 +605,30 @@ Users can export a complete JSON backup of the entire Dexie database via **Setti
 - Generates `invoice_app_full_backup_YYYY-MM-DD.json`.
 - Restores all tables (`invoices`, `clients`, `items`, `companies`, `settings`) atomically in a Dexie read-write transaction.
 - Automatically passes all imported invoices through `transformInvoiceForDexie` to ensure GST standardization.
+
+### 8.4. Template Token Engine & CSS Sanitization Security Policy (`templates.js` & `cssSanitizer.js`)
+
+Invoice layouts are rendered dynamically through `renderInvoiceTemplate(htmlString, invoiceData)`:
+1. **Repeating Block Processing**: Resolves `{{#items}}...{{/items}}` and `{{#lineItems}}...{{/lineItems}}` repeating blocks with 1-based indices and line totals.
+2. **Scalar Token Interpolation**: Replaces scalar tokens (`{{sender.*}}`, `{{recipient.*}}`, `{{totals.*}}`, etc.) with properly escaped HTML values.
+3. **DOMPurify HTML & CSS Sanitization Pipeline**:
+   - Strips dangerous HTML tags (`<script>`, `<iframe>`, `<object>`, `<embed>`, `<base>`) and event handler attributes (`onerror`, `onload`, `onclick`, etc.).
+   - Employs dedicated DOMPurify lifecycle hooks coupled with an AST-based CSS parser (`css-tree`) rather than relying on regular expressions.
+   - **Centralized Configuration & Hook Architecture**: Defines canonical base settings in `DEFAULT_DOMPURIFY_CONFIG`, derived into `WHOLE_DOCUMENT_PURIFY_CONFIG` and `FRAGMENT_PURIFY_CONFIG` without configuration duplication. Hooks are registered idempotently via `registerSanitizationHooks` guarded by a `WeakSet` to prevent duplicate hook accumulation across repeated invocations.
+
+#### CSS Security Policy Boundaries:
+- **Parser-Based Evaluation**: CSS is parsed into an Abstract Syntax Tree (`css-tree`). Malformed, truncated, or unparseable CSS fails closed (returns an empty string, removing the unsafe construct).
+- **At-Rules Allowlist**: Permits `@media`, `@page`, `@supports`, and `@keyframes`. All other at-rules (specifically `@import`, `@font-face`, `@charset`, `@namespace`, `@document`, `@scope`) are unconditionally stripped.
+- **Forbidden Properties**: Blocks legacy execution vectors including `behavior`, `-ms-behavior`, `-moz-binding`, and `expression`.
+- **Dangerous Functions**: Strips legacy CSS dynamic expressions (`expression(...)`).
+- **URL Security Policy (`isSafeUrl`)**:
+  - Rejects dangerous schemes (`javascript:`, `vbscript:`, `file:`, `blob:`, `about:`).
+  - Restricts `data:` URIs strictly to base64-encoded raster images (`image/png`, `image/jpeg`, `image/gif`, `image/webp`). Blocks `data:text/html` and `data:image/svg+xml`.
+  - Rejects URLs containing ASCII control characters (0x00–0x1F, 0x7F) or delimiter characters (`{`, `}`, `<`, `>`, `"`, `'`, `\`, `` ` ``).
+  - Allows valid HTTPS/HTTP image references and relative local paths.
+- **Obfuscation & Escape Defenses**: Normalizes CSS unicode escape sequences (e.g. `\6a avascript:` $\to$ `javascript:`, `exp\72 ession` $\to$ `expression`) and handles CSS comment insertion (`/**/`) before property and value inspection.
+- **Dual Surface Sanitization**: Applies the policy uniformly to both `<style>` blocks (via `uponSanitizeElement`) and inline `style="..."` attributes (via `uponSanitizeAttribute`).
+- **Clean Pruning**: Rules or blocks emptied by sanitization are pruned; `<style>` tags with no remaining rules and elements with no remaining inline styles have their style tags or attributes completely removed.
 
 ---
 

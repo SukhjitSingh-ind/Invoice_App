@@ -9,6 +9,7 @@ const testFiles = [
     './utils/invoiceCalculations.test.js',
     './utils/numberToWords.test.js',
     './utils/validation.test.js',
+    './utils/cssSanitizer.test.js',
     './utils/templates.test.js',
     './utils/clientHelpers.test.js',
     './utils/jsonInvoiceParser.test.js',

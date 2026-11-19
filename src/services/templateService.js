@@ -402,3 +402,6 @@ export async function deleteTemplateAsync(id, dbInstance = db) {
         }
     );
 }
+
+export { renderInvoiceTemplate } from '../utils/templates.js';
+
