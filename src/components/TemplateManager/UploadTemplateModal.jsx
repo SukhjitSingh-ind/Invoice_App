@@ -42,6 +42,7 @@ function formatDefaultName(fileName) {
 export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existingTemplates = [] }) {
     const { addToast } = useToast();
     const fileInputRef = useRef(null);
+    const activeReadIdRef = useRef(0);
 
     const [file, setFile] = useState(null);
     const [rawHtml, setRawHtml] = useState('');
@@ -66,6 +67,17 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
         }
     }, [isOpen]);
 
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
+
     const tokenAnalysis = useMemo(() => {
         if (!rawHtml) return null;
         return detectTemplateTokens(rawHtml);
@@ -82,6 +94,7 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
     }, [rawHtml]);
 
     const handleFileProcess = async (selectedFile) => {
+        const readId = ++activeReadIdRef.current;
         setFileError(null);
         setNameError(null);
 
@@ -98,6 +111,10 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
 
         try {
             const content = await readTemplateFileAsync(selectedFile);
+            if (activeReadIdRef.current !== readId) {
+                return;
+            }
+
             const htmlCheck = validateTemplateHtml(content);
             if (!htmlCheck.valid) {
                 setFileError(htmlCheck.error);
@@ -116,10 +133,14 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
                 }
             }
         } catch (err) {
-            setFileError(err.message || 'An error occurred while reading the file. Please try again.');
-            setRawHtml('');
+            if (activeReadIdRef.current === readId) {
+                setFileError(err.message || 'An error occurred while reading the file. Please try again.');
+                setRawHtml('');
+            }
         } finally {
-            setIsReading(false);
+            if (activeReadIdRef.current === readId) {
+                setIsReading(false);
+            }
         }
     };
 
@@ -213,7 +234,12 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div
+                className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="upload-template-modal-title"
+            >
                 {/* Modal Header */}
                 <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
                     <div className="flex items-center gap-3">
@@ -221,7 +247,7 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
                             <Upload size={20} />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-slate-900">Upload Your Own Template</h2>
+                            <h2 id="upload-template-modal-title" className="text-xl font-bold text-slate-900">Upload Your Own Template</h2>
                             <p className="text-xs text-slate-500">
                                 Upload a local .html or .htm file with supported invoice tokens to create a custom layout.
                             </p>
@@ -239,9 +265,12 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
 
                 {/* Subheader Navigation: Details vs Live Preview */}
                 {rawHtml && (
-                    <div className="flex border-b border-slate-200 bg-white px-6">
+                    <div className="flex border-b border-slate-200 bg-white px-6" role="tablist" aria-label="Template upload options">
                         <button
                             type="button"
+                            role="tab"
+                            aria-selected={activeTab === 'details'}
+                            aria-controls="template-details-panel"
                             onClick={() => setActiveTab('details')}
                             className={`py-3 px-4 text-sm font-bold border-b-2 flex items-center gap-2 transition-colors cursor-pointer ${
                                 activeTab === 'details'
@@ -254,6 +283,9 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
                         </button>
                         <button
                             type="button"
+                            role="tab"
+                            aria-selected={activeTab === 'preview'}
+                            aria-controls="template-preview-panel"
                             onClick={() => setActiveTab('preview')}
                             className={`py-3 px-4 text-sm font-bold border-b-2 flex items-center gap-2 transition-colors cursor-pointer ${
                                 activeTab === 'preview'
@@ -444,7 +476,7 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
                             <div className="border border-slate-300 rounded-xl overflow-hidden shadow-inner bg-white h-[460px]">
                                 <iframe
                                     title="Invoice Template Preview"
-                                    sandbox="allow-same-origin"
+                                    sandbox=""
                                     srcDoc={previewHtml}
                                     className="w-full h-full border-0"
                                 />

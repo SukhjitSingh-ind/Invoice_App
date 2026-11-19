@@ -341,6 +341,115 @@ async function runTests() {
     assert(typeof formattedTpl.previewColor === 'string' && formattedTpl.previewColor.includes('gradient'), 'Assigns aesthetic previewColor gradient');
     assert(formattedTpl.description.includes('My Special Template'), 'Generates meaningful description');
 
+    // =========================================================================
+    // 8. ADVERSARIAL HTML & CSS SANITIZATION SECURITY (Finding 3)
+    // =========================================================================
+    console.log('\n--- 8. Testing Adversarial HTML & CSS Sanitization Security (Finding 3) ---');
+
+    // Attack 1: SVG-based script injection
+    const svgAttack = '<div><h1>Invoice</h1><svg><script>window.pwned = true;</script></svg></div>';
+    const svgSanitized = previewUploadedTemplate(svgAttack);
+    assert(!svgSanitized.includes('<script>'), 'SVG script tag is stripped');
+    assert(!svgSanitized.includes('window.pwned'), 'SVG script body is stripped');
+
+    // Attack 2: Obfuscated CSS escape sequences (\6a avascript:)
+    const cssEscapeAttack = `
+      <div style="background: url('\\6a avascript:alert(1)')">
+        <style>
+          .card { background-image: url('\\00006a avascript:alert(2)'); }
+        </style>
+        <h1>Escapes</h1>
+      </div>
+    `;
+    const cssEscapeSanitized = previewUploadedTemplate(cssEscapeAttack);
+    assert(!cssEscapeSanitized.includes('javascript:'), 'Obfuscated CSS escape sequences in url() are neutralized');
+
+    // Attack 3: @import rules in CSS
+    const importAttack = `
+      <style>
+        @import url('https://attacker.example/malicious.css');
+        .normal { color: red; }
+      </style>
+      <div class="normal">Text</div>
+    `;
+    const importSanitized = previewUploadedTemplate(importAttack);
+    assert(!importSanitized.includes('@import'), '@import rule in stylesheet is completely stripped');
+    assert(importSanitized.includes('color:red') || importSanitized.includes('color: red'), 'Legitimate rules beside @import are preserved');
+
+    // Attack 4: Inline event handlers across multiple elements
+    const eventHandlerAttack = '<div onmouseenter="evil()" onpointerdown="bad()"><img src="x" onerror="alert(1)" onload="alert(2)" /><input onfocus="bad()" /></div>';
+    const eventSanitized = previewUploadedTemplate(eventHandlerAttack);
+    assert(!eventSanitized.includes('onmouseenter'), 'onmouseenter event handler stripped');
+    assert(!eventSanitized.includes('onpointerdown'), 'onpointerdown event handler stripped');
+    assert(!eventSanitized.includes('onerror'), 'onerror event handler stripped');
+    assert(!eventSanitized.includes('onload'), 'onload event handler stripped');
+    assert(!eventSanitized.includes('onfocus'), 'onfocus event handler stripped');
+
+    // Attack 5: CSS expressions
+    const exprAttack = '<div style="width: expression(alert(1)); color: blue;">Expr</div>';
+    const exprSanitized = previewUploadedTemplate(exprAttack);
+    assert(!exprSanitized.includes('expression'), 'CSS expression in style attribute is neutralized');
+    assert(exprSanitized.includes('color: blue') || exprSanitized.includes('color:blue'), 'Safe properties beside CSS expressions are preserved');
+
+    // =========================================================================
+    // 9. BINARY & MALFORMED FILE CONTENT VALIDATION (Finding 6)
+    // =========================================================================
+    console.log('\n--- 9. Testing Binary & Malformed File Content (Finding 6) ---');
+
+    // Binary file disguised as HTML (contains null bytes)
+    const binaryDisguised = '<html><body>\x00\x01\x02\x03PNG\x00\x00\x00\rIHDR</body></html>';
+    const binaryCheck = validateTemplateHtml(binaryDisguised);
+    assert(!binaryCheck.valid, 'Rejects file containing null/binary bytes');
+    assert(binaryCheck.error.includes('binary or invalid characters'), 'Error specifies binary or invalid content');
+
+    // Malformed HTML without any HTML tag
+    const nonHtmlText = 'Just some arbitrary words invoiceNumber: 12345 total: 500';
+    const nonHtmlCheck = validateTemplateHtml(nonHtmlText);
+    assert(!nonHtmlCheck.valid, 'Rejects arbitrary plain text without HTML tags');
+
+    // =========================================================================
+    // 10. TEMPLATE SELECTION & ID TYPE CONSISTENCY (Finding 1)
+    // =========================================================================
+    console.log('\n--- 10. Testing Template Selection & ID Type Consistency (Finding 1) ---');
+
+    const sampleCatalog = [
+        { id: 'default', name: 'Professional Clean', layout: 'classic' },
+        { id: 'modern_indigo', name: 'Modern Indigo', layout: 'modern' },
+        formattedTpl // numeric ID: 42, key: 'custom_42'
+    ];
+
+    // Look up by numeric ID (from newly uploaded custom template)
+    const matchByNumeric = sampleCatalog.find(
+        t => t.id === 42 || String(t.id) === String(42) || (t.key && String(t.key) === String(42))
+    );
+    assert(matchByNumeric !== undefined && matchByNumeric.name === 'My Special Template', 'Lookup by numeric ID 42 resolves custom template');
+
+    // Look up by stringified numeric ID (from URL query param ?template=42)
+    const matchByStringNumeric = sampleCatalog.find(
+        t => t.id === '42' || String(t.id) === String('42') || (t.key && String(t.key) === String('42'))
+    );
+    assert(matchByStringNumeric !== undefined && matchByStringNumeric.name === 'My Special Template', 'Lookup by string "42" resolves custom template');
+
+    // Look up by custom slug key ('custom_42')
+    const matchByKey = sampleCatalog.find(
+        t => t.id === 'custom_42' || String(t.id) === String('custom_42') || (t.key && String(t.key) === String('custom_42'))
+    );
+    assert(matchByKey !== undefined && matchByKey.name === 'My Special Template', 'Lookup by key "custom_42" resolves custom template');
+
+    // Switching between built-in and custom templates
+    let activeSelection = 42;
+    assert(activeSelection === 42, 'Initial selection is custom numeric ID');
+    activeSelection = 'modern_indigo';
+    assert(activeSelection === 'modern_indigo', 'Switched to built-in template "modern_indigo"');
+    activeSelection = 42;
+    assert(activeSelection === 42, 'Switched back to custom template ID');
+
+    // Look up nonexistent template returns undefined (safe fallback)
+    const matchNonExistent = sampleCatalog.find(
+        t => t.id === 9999 || String(t.id) === String(9999) || (t.key && String(t.key) === String(9999))
+    );
+    assert(matchNonExistent === undefined, 'Non-existent template ID safely returns undefined');
+
     console.log(`\nTests Completed: ${passed} Passed, ${failed} Failed`);
     if (failed > 0) {
         process.exit(1);

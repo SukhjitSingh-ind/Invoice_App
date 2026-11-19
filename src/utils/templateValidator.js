@@ -314,6 +314,13 @@ export function validateTemplateHtml(htmlContent) {
         };
     }
 
+    if (htmlContent.includes('\0')) {
+        return {
+            valid: false,
+            error: 'The uploaded file contains binary or invalid characters and is not valid HTML.'
+        };
+    }
+
     const trimmed = htmlContent.trim();
     if (!trimmed) {
         return {

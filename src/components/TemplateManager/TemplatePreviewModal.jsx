@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { X, Eye, FileCode } from 'lucide-react';
+import React, { useMemo, useEffect } from 'react';
+import { X, Eye } from 'lucide-react';
 import { previewUploadedTemplate } from '../../utils/templateValidator.js';
 
 export default function TemplatePreviewModal({ isOpen, onClose, template }) {
@@ -13,11 +13,27 @@ export default function TemplatePreviewModal({ isOpen, onClose, template }) {
         }
     }, [template]);
 
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
+
     if (!isOpen || !template) return null;
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div
+                className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="template-preview-title"
+            >
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
                     <div className="flex items-center gap-3">
@@ -26,7 +42,7 @@ export default function TemplatePreviewModal({ isOpen, onClose, template }) {
                         </div>
                         <div>
                             <div className="flex items-center gap-2">
-                                <h2 className="text-lg font-bold text-slate-900">{template.name}</h2>
+                                <h2 id="template-preview-title" className="text-lg font-bold text-slate-900">{template.name}</h2>
                                 {template.isBuiltIn ? (
                                     <span className="px-2 py-0.5 text-[10px] bg-slate-200 text-slate-700 font-bold rounded-full">
                                         Built-in
@@ -55,7 +71,7 @@ export default function TemplatePreviewModal({ isOpen, onClose, template }) {
                     <div className="border border-slate-300 rounded-xl overflow-hidden shadow-inner bg-white h-[580px]">
                         <iframe
                             title={`Preview of ${template.name}`}
-                            sandbox="allow-same-origin"
+                            sandbox=""
                             srcDoc={previewHtml}
                             className="w-full h-full border-0"
                         />

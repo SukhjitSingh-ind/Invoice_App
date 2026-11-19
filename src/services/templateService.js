@@ -68,6 +68,16 @@ export async function seedBuiltInTemplates(dbInstance = db) {
 
                     if (existing) {
                         existingCount++;
+                        const updates = {};
+                        if (!existing.key && def.key) {
+                            updates.key = def.key;
+                        }
+                        if (existing.isBuiltIn === undefined) {
+                            updates.isBuiltIn = true;
+                        }
+                        if (Object.keys(updates).length > 0) {
+                            await dbInstance.templates.update(existing.id, updates);
+                        }
                     } else {
                         const shouldBeDefault = Boolean(def.isDefault) && !defaultAssignedDuringSeeding;
                         if (shouldBeDefault) {
@@ -164,7 +174,10 @@ export async function resolveValidTemplateId(candidateId, dbInstance = db) {
             const numId = typeof candidateId === 'string' && /^\d+$/.test(candidateId)
                 ? Number(candidateId)
                 : candidateId;
-            const target = await dbInstance.templates.get(numId);
+            let target = await dbInstance.templates.get(numId);
+            if (!target && typeof candidateId === 'string') {
+                target = await dbInstance.templates.where('key').equals(candidateId).first();
+            }
             if (target) {
                 return target.id;
             }
@@ -202,7 +215,10 @@ export async function getTemplateByIdAsync(id, dbInstance = db) {
     if (id == null) return null;
 
     const numId = typeof id === 'string' && /^\d+$/.test(id) ? Number(id) : id;
-    const found = await dbInstance.templates.get(numId);
+    let found = await dbInstance.templates.get(numId);
+    if (!found && typeof id === 'string') {
+        found = await dbInstance.templates.where('key').equals(id).first();
+    }
     return found || null;
 }
 
@@ -291,6 +307,20 @@ export async function saveTemplateAsync(template, dbInstance = db) {
         DEXIE_TRANSACTION_MODE.READ_WRITE,
         [dbInstance.templates],
         async () => {
+            const allTemplates = await dbInstance.templates.toArray();
+            const normalizedName = record.name.trim().toLowerCase();
+            const isDuplicate = allTemplates.some(t => {
+                if (!t || typeof t.name !== 'string') return false;
+                if (record.id != null && String(t.id) === String(record.id)) {
+                    return false;
+                }
+                return t.name.trim().toLowerCase() === normalizedName;
+            });
+
+            if (isDuplicate) {
+                throw new Error(`A template named "${record.name}" already exists. Please choose a unique name.`);
+            }
+
             if (record.isDefault) {
                 await dbInstance.templates
                     .filter(t => Boolean(t.isDefault) && (!record.id || t.id !== record.id))
@@ -351,7 +381,7 @@ export async function setDefaultTemplateAsync(id, dbInstance = db) {
  * @param {import('dexie').Dexie} [dbInstance=db]
  * @returns {Promise<boolean>}
  */
-export async function deleteTemplateAsync(id, dbInstance = db) {
+export async function deleteTemplateAsync(id, dbInstance = db, options = {}) {
     if (!dbInstance.isOpen()) {
         await dbInstance.open();
     }
@@ -360,6 +390,9 @@ export async function deleteTemplateAsync(id, dbInstance = db) {
     const tables = [dbInstance.templates];
     if (dbInstance.settings) {
         tables.push(dbInstance.settings);
+    }
+    if (dbInstance.invoices) {
+        tables.push(dbInstance.invoices);
     }
 
     return await dbInstance.transaction(
@@ -371,10 +404,29 @@ export async function deleteTemplateAsync(id, dbInstance = db) {
                 return false;
             }
 
+            // Check if existing invoices reference this template
+            if (dbInstance.invoices) {
+                const referencingInvoices = await dbInstance.invoices
+                    .filter(inv => inv.template === numId || String(inv.template) === String(numId) || (templateToDelete.key && inv.template === templateToDelete.key))
+                    .toArray();
+
+                if (referencingInvoices.length > 0) {
+                    if (options && options.reassignInvoicesTo) {
+                        for (const inv of referencingInvoices) {
+                            await dbInstance.invoices.update(inv.id, { template: options.reassignInvoicesTo });
+                        }
+                    } else {
+                        throw new Error(`Cannot delete template "${templateToDelete.name}": it is currently referenced by ${referencingInvoices.length} invoice(s).`);
+                    }
+                }
+            }
+
             const wasDefault = Boolean(templateToDelete.isDefault);
             await dbInstance.templates.delete(numId);
 
             if (wasDefault) {
+                await dbInstance.templates.filter(t => Boolean(t.isDefault)).modify({ isDefault: false });
+
                 const classic = await dbInstance.templates.where('name').equals(DEFAULT_BUILT_IN_TEMPLATE_NAME).first();
                 if (classic) {
                     await dbInstance.templates.update(classic.id, { isDefault: true, updatedAt: new Date() });
@@ -389,7 +441,7 @@ export async function deleteTemplateAsync(id, dbInstance = db) {
             if (dbInstance.settings) {
                 try {
                     const configRecord = await dbInstance.settings.get(STORAGE_KEYS.APP_CONFIG);
-                    if (configRecord && configRecord.value && configRecord.value.selectedTemplateId === numId) {
+                    if (configRecord && configRecord.value && (configRecord.value.selectedTemplateId === numId || String(configRecord.value.selectedTemplateId) === String(numId))) {
                         const fallbackTpl = await getDefaultTemplate(dbInstance);
                         configRecord.value.selectedTemplateId = fallbackTpl?.id || null;
                         await dbInstance.settings.put(configRecord);

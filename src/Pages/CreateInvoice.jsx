@@ -189,7 +189,9 @@ export default function CreateInvoice() {
     };
 
     const selectedClientData = clients.find(c => c.id.toString() === selectedClient);
-    const selectedTemplateData = allTemplates.find(t => t.id === selectedTemplate);
+    const selectedTemplateData = allTemplates.find(
+        t => t.id === selectedTemplate || String(t.id) === String(selectedTemplate) || (t.key && String(t.key) === String(selectedTemplate))
+    );
 
     return (
         <div className="p-6 md:p-8 max-w-6xl mx-auto pb-16">
@@ -646,7 +648,11 @@ export default function CreateInvoice() {
                     </div>
 
                     {allTemplates.map(template => {
-                        const isSelected = selectedTemplate === template.id;
+                        const isSelected = selectedTemplate != null && selectedTemplate !== '' && (
+                            template.id === selectedTemplate ||
+                            String(template.id) === String(selectedTemplate) ||
+                            (template.key && String(template.key) === String(selectedTemplate))
+                        );
 
                         return (
                             <div
@@ -924,8 +930,8 @@ export default function CreateInvoice() {
                 isOpen={isUploadModalOpen}
                 onClose={() => setIsUploadModalOpen(false)}
                 existingTemplates={dexieTemplates}
-                onSuccess={(savedId, payload) => {
-                    setSelectedTemplate(payload.key || String(savedId));
+                onSuccess={(savedId) => {
+                    setSelectedTemplate(savedId);
                 }}
             />
 
