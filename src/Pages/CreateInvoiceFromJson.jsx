@@ -86,6 +86,20 @@ export default function CreateInvoiceFromJson() {
     // Template manual override state (null or empty string means not manually overridden)
     const [manualTemplateId, setManualTemplateId] = useState('');
 
+    const liveTemplates = useLiveQuery(() => db.templates.toArray(), []);
+    const customTemplates = useMemo(() => (liveTemplates || []).filter(t => !t.isBuiltIn), [liveTemplates]);
+    const allSelectableTemplates = useMemo(() => {
+        const custom = customTemplates.map(ct => ({
+            id: ct.key || String(ct.id),
+            name: ct.name,
+            color: 'purple',
+            previewColor: 'bg-indigo-700',
+            layout: 'custom',
+            isCustom: true
+        }));
+        return [...custom, ...TEMPLATES];
+    }, [customTemplates]);
+
     // GST manual override state (null = use JSON/default; boolean = explicit user toggle)
     const [manualIsGST, setManualIsGST] = useState(null);
 
@@ -801,7 +815,7 @@ export default function CreateInvoiceFromJson() {
 
                 {/* Templates Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mt-5">
-                    {TEMPLATES.map((tmpl) => {
+                    {allSelectableTemplates.map((tmpl) => {
                         const isSelected = resolvedData.invoice.template === tmpl.id;
                         const isManuallyPicked = manualTemplateId === tmpl.id;
 
