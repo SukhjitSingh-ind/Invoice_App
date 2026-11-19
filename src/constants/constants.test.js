@@ -168,7 +168,8 @@ const expectedRoutes = {
     EDIT_INVOICE: '/edit/:id',
     PREVIEW_INVOICE: '/preview/:id',
     SETTINGS: '/settings',
-    YOUR_DETAILS: '/your-details'
+    YOUR_DETAILS: '/your-details',
+    TEMPLATE_STUDIO: '/template-studio'
 };
 
 for (const [key, expectedPath] of Object.entries(expectedRoutes)) {
@@ -188,6 +189,11 @@ assert(constants.getEditInvoiceRoute(999) === '/edit/999', 'getEditInvoiceRoute 
 assert(typeof constants.getPreviewInvoiceRoute === 'function', 'getPreviewInvoiceRoute is a function');
 assert(constants.getPreviewInvoiceRoute('inv_456') === '/preview/inv_456', 'getPreviewInvoiceRoute produces "/preview/inv_456"');
 assert(constants.getPreviewInvoiceRoute(888) === '/preview/888', 'getPreviewInvoiceRoute produces "/preview/888"');
+
+assert(typeof constants.getTemplateStudioRoute === 'function', 'getTemplateStudioRoute is a function');
+assert(constants.getTemplateStudioRoute() === '/template-studio', 'getTemplateStudioRoute() produces "/template-studio"');
+assert(constants.getTemplateStudioRoute(42) === '/template-studio?templateId=42', 'getTemplateStudioRoute(42) produces "/template-studio?templateId=42"');
+assert(constants.getTemplateStudioRoute('classic', 'duplicate') === '/template-studio?templateId=classic&action=duplicate', 'getTemplateStudioRoute with action produces query string');
 
 // =========================================================================
 // 3. Single Source of Truth / Duplicate Prevention Validation

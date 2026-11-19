@@ -498,6 +498,106 @@ export function validateTemplateName(name, existingTemplates = [], currentTempla
 }
 
 /**
+ * Validates custom CSS stylesheet content.
+ * Accepts empty/null strings (CSS is optional) and validates against binary characters and size limits.
+ *
+ * @param {string} cssContent
+ * @returns {{ valid: boolean, error: string | null }}
+ */
+export function validateTemplateCss(cssContent) {
+    if (cssContent == null || cssContent === '') {
+        return { valid: true, error: null };
+    }
+
+    if (typeof cssContent !== 'string') {
+        return {
+            valid: false,
+            error: 'CSS stylesheet must be a text string.'
+        };
+    }
+
+    if (cssContent.includes('\0')) {
+        return {
+            valid: false,
+            error: 'CSS stylesheet contains binary or invalid characters.'
+        };
+    }
+
+    if (cssContent.length > MAX_TEMPLATE_FILE_SIZE_BYTES) {
+        return {
+            valid: false,
+            error: 'CSS content exceeds the 2 MB size limit.'
+        };
+    }
+
+    return { valid: true, error: null };
+}
+
+/**
+ * Validates a complete Template Studio payload before persistence.
+ *
+ * @param {object} payload
+ * @param {string} payload.name - Template name
+ * @param {string} payload.html - HTML markup
+ * @param {string} [payload.css] - CSS stylesheet
+ * @param {Array<object>} [payload.existingTemplates=[]] - Existing templates for duplicate detection
+ * @param {number|string|null} [payload.currentTemplateId=null] - Current ID if updating
+ * @returns {{ valid: boolean, errors: Record<string, string>, trimmedName: string }}
+ */
+export function validateTemplateStudioPayload({
+    name,
+    html,
+    css = '',
+    existingTemplates = [],
+    currentTemplateId = null
+}) {
+    const errors = {};
+
+    const nameCheck = validateTemplateName(name, existingTemplates, currentTemplateId);
+    if (!nameCheck.valid) {
+        errors.name = nameCheck.error;
+    }
+
+    const htmlCheck = validateTemplateHtml(html);
+    if (!htmlCheck.valid) {
+        errors.html = htmlCheck.error;
+    }
+
+    const cssCheck = validateTemplateCss(css);
+    if (!cssCheck.valid) {
+        errors.css = cssCheck.error;
+    }
+
+    const totalSize = (html ? html.length : 0) + (css ? css.length : 0);
+    if (totalSize > MAX_TEMPLATE_FILE_SIZE_BYTES) {
+        errors.general = 'Total template content (HTML + CSS) exceeds the 2 MB limit.';
+    }
+
+    return {
+        valid: Object.keys(errors).length === 0,
+        errors,
+        trimmedName: nameCheck.trimmedName
+    };
+}
+
+/**
+ * Generates a sanitized live preview of an uploaded or edited template with CSS using sample invoice data.
+ *
+ * @param {string} rawHtml - HTML template markup
+ * @param {string} [css=''] - CSS template stylesheet
+ * @param {object} [customSampleData=null] - Custom sample data override
+ * @returns {string} Sanitized preview HTML
+ */
+export function previewTemplateWithCss(rawHtml, css = '', customSampleData = null) {
+    if (!rawHtml || typeof rawHtml !== 'string') return '';
+    const fullHtml = css && typeof css === 'string' && css.trim()
+        ? `<style>${css}</style>${rawHtml}`
+        : rawHtml;
+    const data = customSampleData || SAMPLE_INVOICE_DATA;
+    return renderInvoiceTemplate(fullHtml, data);
+}
+
+/**
  * Generates a sanitized live preview of an uploaded template using sample invoice data.
  *
  * @param {string} rawHtml
@@ -508,3 +608,12 @@ export function previewUploadedTemplate(rawHtml, customSampleData = null) {
     const data = customSampleData || SAMPLE_INVOICE_DATA;
     return renderInvoiceTemplate(rawHtml, data);
 }
+
+export {
+    TOKEN_CATEGORIES,
+    TEMPLATE_TOKENS,
+    generateUniqueTemplateName,
+    STARTER_HTML_TEMPLATE,
+    STARTER_CSS_TEMPLATE
+} from './templateTokens.js';
+

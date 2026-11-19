@@ -15,6 +15,7 @@ const testFiles = [
     './utils/jsonInvoiceParser.test.js',
     './services/migrationService.test.js',
     './services/templateService.test.js',
+    './services/templateStudio.test.js',
     './utils/templateValidator.test.js'
 ];
 

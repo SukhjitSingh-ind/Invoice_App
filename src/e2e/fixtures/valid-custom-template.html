@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bespoke Emerald Invoice</title>
+  <style>
+    .emerald-invoice {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 30px;
+      color: #064e3b;
+      background: #f0fdf4;
+      border: 2px solid #059669;
+      border-radius: 12px;
+    }
+    .emerald-header {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 2px solid #10b981;
+      padding-bottom: 15px;
+      margin-bottom: 20px;
+    }
+    .emerald-title {
+      font-size: 26px;
+      font-weight: 800;
+      color: #047857;
+    }
+    .emerald-meta {
+      font-size: 14px;
+      color: #065f46;
+      line-height: 1.5;
+    }
+    .emerald-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    .emerald-table th {
+      background: #059669;
+      color: white;
+      text-align: left;
+      padding: 10px;
+      font-size: 13px;
+    }
+    .emerald-table td {
+      padding: 10px;
+      border-bottom: 1px solid #a7f3d0;
+      font-size: 13px;
+    }
+    .emerald-total {
+      text-align: right;
+      font-size: 18px;
+      font-weight: bold;
+      color: #047857;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="emerald-invoice">
+    <div class="emerald-header">
+      <div>
+        <div class="emerald-title">TAX INVOICE</div>
+        <div class="emerald-meta">
+          <strong>{{sender.name}}</strong><br>
+          {{sender.address}}<br>
+          GST: {{sender.gstNumber}}
+        </div>
+      </div>
+      <div style="text-align: right;" class="emerald-meta">
+        <div>Invoice #: <strong>{{invoiceNumber}}</strong></div>
+        <div>Date: {{date}}</div>
+        <div>Due: {{dueDate}}</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 20px;" class="emerald-meta">
+      <strong>Billed To:</strong><br>
+      {{recipient.name}}<br>
+      {{recipient.address}}<br>
+      GST: {{recipient.gstNumber}}
+    </div>
+
+    <table class="emerald-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Description</th>
+          <th>Qty</th>
+          <th>Rate</th>
+          <th>Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#items}}
+        <tr>
+          <td>{{index}}</td>
+          <td>{{description}}</td>
+          <td>{{quantity}}</td>
+          <td>{{unitPrice}}</td>
+          <td>{{amount}}</td>
+        </tr>
+        {{/items}}
+      </tbody>
+    </table>
+
+    <div class="emerald-total">
+      Grand Total: {{currency}} {{totals.total}}
+    </div>
+  </div>
+</body>
+</html>

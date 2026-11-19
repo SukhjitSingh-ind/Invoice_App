@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    .sapphire-box { background: #eff6ff; border: 2px solid #2563eb; padding: 24px; color: #1e3a8a; }
+    .sapphire-header { font-size: 24px; font-weight: bold; color: #1d4ed8; }
+  </style>
+</head>
+<body>
+  <div class="sapphire-box">
+    <div class="sapphire-header">Sapphire Pro Invoice - {{invoiceNumber}}</div>
+    <p>Client: {{recipient.name}}</p>
+    <div>
+      {{#items}}
+      <p>{{description}} - {{amount}}</p>
+      {{/items}}
+    </div>
+    <h3>Total: {{totals.total}}</h3>
+  </div>
+</body>
+</html>

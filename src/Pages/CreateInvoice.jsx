@@ -19,7 +19,8 @@ import {
     AlertCircle,
     FileCode2,
     Upload,
-    Eye
+    Eye,
+    Edit3
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db.js';
@@ -37,7 +38,7 @@ import {
     getPageNumbers
 } from '../utils/clientHelpers';
 import { useToast } from '../components/Toast';
-import { ROUTES, PAGINATION, APP_DEFAULTS, TOAST_TYPES, CLIENTS_PER_PAGE } from '../constants/index.js';
+import { ROUTES, PAGINATION, APP_DEFAULTS, TOAST_TYPES, CLIENTS_PER_PAGE, getTemplateStudioRoute } from '../constants/index.js';
 
 export default function CreateInvoice() {
     const navigate = useNavigate();
@@ -597,6 +598,16 @@ export default function CreateInvoice() {
                     <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
                         <button
                             type="button"
+                            onClick={() => navigate(ROUTES.TEMPLATE_STUDIO)}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm hover:shadow transition-all cursor-pointer"
+                            title="Open Template Studio to create or customize templates"
+                        >
+                            <Plus size={14} />
+                            Template Studio
+                        </button>
+
+                        <button
+                            type="button"
                             onClick={() => setIsUploadModalOpen(true)}
                             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm hover:shadow transition-all cursor-pointer"
                         >
@@ -709,19 +720,34 @@ export default function CreateInvoice() {
                                             }`} title={template.name}>
                                                 {template.name}
                                             </h4>
-                                            {template.rawRecord && (
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setPreviewTemplate(template.rawRecord);
-                                                    }}
-                                                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors shrink-0"
-                                                    title="Preview template"
-                                                >
-                                                    <Eye size={14} />
-                                                </button>
-                                            )}
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                {template.rawRecord && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            navigate(getTemplateStudioRoute(template.rawRecord.id, template.rawRecord.isBuiltIn ? 'duplicate' : 'edit'));
+                                                        }}
+                                                        className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors shrink-0"
+                                                        title="Customize in Template Studio"
+                                                    >
+                                                        <Edit3 size={14} />
+                                                    </button>
+                                                )}
+                                                {template.rawRecord && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setPreviewTemplate(template.rawRecord);
+                                                        }}
+                                                        className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors shrink-0"
+                                                        title="Preview template"
+                                                    >
+                                                        <Eye size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                         <p className="text-xs text-slate-500 mt-1 line-clamp-2">
                                             {template.description}
