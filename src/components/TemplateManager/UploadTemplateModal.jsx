@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import {
     validateTemplateFile,
+    readTemplateFileAsync,
     validateTemplateHtml,
     detectTemplateTokens,
     validateTemplateName,
@@ -31,7 +32,7 @@ import { TOAST_TYPES } from '../../constants/index.js';
  */
 function formatDefaultName(fileName) {
     if (!fileName) return '';
-    const base = fileName.replace(/\.[^/.]+$/, ''); // Remove extension
+    const base = fileName.replace(/\.[^/.]+$/, '');
     return base
         .replace(/[-_]+/g, ' ')
         .replace(/\b\w/g, (char) => char.toUpperCase())
@@ -49,10 +50,9 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
     const [fileError, setFileError] = useState(null);
     const [isReading, setIsReading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const [activeTab, setActiveTab] = useState('details'); // 'details' | 'preview'
+    const [activeTab, setActiveTab] = useState('details');
     const [isDragging, setIsDragging] = useState(false);
 
-    // Reset state when modal is opened or closed
     useEffect(() => {
         if (!isOpen) {
             setFile(null);
@@ -66,13 +66,11 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
         }
     }, [isOpen]);
 
-    // Token analysis of the uploaded HTML
     const tokenAnalysis = useMemo(() => {
         if (!rawHtml) return null;
         return detectTemplateTokens(rawHtml);
     }, [rawHtml]);
 
-    // Sanitized preview HTML rendered using sample invoice data
     const previewHtml = useMemo(() => {
         if (!rawHtml) return '';
         try {
@@ -83,7 +81,7 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
         }
     }, [rawHtml]);
 
-    const handleFileProcess = (selectedFile) => {
+    const handleFileProcess = async (selectedFile) => {
         setFileError(null);
         setNameError(null);
 
@@ -98,17 +96,8 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
         setFile(selectedFile);
         setIsReading(true);
 
-        const reader = new FileReader();
-
-        reader.onload = (e) => {
-            setIsReading(false);
-            const content = e.target?.result;
-            if (typeof content !== 'string') {
-                setFileError('Failed to read file content as text.');
-                setRawHtml('');
-                return;
-            }
-
+        try {
+            const content = await readTemplateFileAsync(selectedFile);
             const htmlCheck = validateTemplateHtml(content);
             if (!htmlCheck.valid) {
                 setFileError(htmlCheck.error);
@@ -116,10 +105,8 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
                 return;
             }
 
-            // Successfully read valid HTML markup
             setRawHtml(content);
 
-            // Set default template name if not already filled
             if (!templateName.trim()) {
                 const defaultName = formatDefaultName(selectedFile.name);
                 setTemplateName(defaultName);
@@ -128,21 +115,12 @@ export default function UploadTemplateModal({ isOpen, onClose, onSuccess, existi
                     setNameError(nameCheck.error);
                 }
             }
-        };
-
-        reader.onerror = () => {
-            setIsReading(false);
-            setFileError('An error occurred while reading the file. Please try again.');
+        } catch (err) {
+            setFileError(err.message || 'An error occurred while reading the file. Please try again.');
             setRawHtml('');
-        };
-
-        reader.onabort = () => {
+        } finally {
             setIsReading(false);
-            setFileError('File upload was aborted.');
-            setRawHtml('');
-        };
-
-        reader.readAsText(selectedFile);
+        }
     };
 
     const handleFileInputChange = (e) => {

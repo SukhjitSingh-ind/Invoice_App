@@ -6,6 +6,7 @@
  */
 
 import { renderInvoiceTemplate } from './templates.js';
+import { MAX_TEMPLATE_FILE_SIZE_BYTES } from '../constants/index.js';
 
 /**
  * Complete list of supported template token identifiers in renderInvoiceTemplate.
@@ -214,13 +215,6 @@ export const SAMPLE_INVOICE_DATA = Object.freeze({
     }
 });
 
-/**
- * Validates a local template file object.
- * Checks for presence and supported file extension (.html or .htm).
- *
- * @param {File|Blob|object} file
- * @returns {{ valid: boolean, error: string | null }}
- */
 export function validateTemplateFile(file) {
     if (!file || typeof file !== 'object') {
         return {
@@ -247,52 +241,62 @@ export function validateTemplateFile(file) {
         };
     }
 
+    if (file.size === 0) {
+        return {
+            valid: false,
+            error: 'The uploaded template file is empty.'
+        };
+    }
+
+    if (typeof file.size === 'number' && file.size > MAX_TEMPLATE_FILE_SIZE_BYTES) {
+        return {
+            valid: false,
+            error: 'File size exceeds the 2 MB limit. Please upload a smaller HTML template file.'
+        };
+    }
+
     return {
         valid: true,
         error: null
     };
 }
 
-/**
- * Reads a local HTML file using the browser's FileReader API.
- *
- * @param {File|Blob} file
- * @returns {Promise<string>} Raw HTML string
- */
-export function readTemplateFileAsync(file) {
-    return new Promise((resolve, reject) => {
-        const fileCheck = validateTemplateFile(file);
-        if (!fileCheck.valid) {
-            reject(new Error(fileCheck.error));
-            return;
-        }
+export async function readTemplateFileAsync(file) {
+    const fileCheck = validateTemplateFile(file);
+    if (!fileCheck.valid) {
+        throw new Error(fileCheck.error);
+    }
 
-        if (typeof FileReader === 'undefined') {
-            reject(new Error('FileReader API is not supported in this environment.'));
-            return;
-        }
+    if (typeof FileReader !== 'undefined') {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
 
-        const reader = new FileReader();
+            reader.onload = () => {
+                const result = reader.result;
+                if (typeof result === 'string') {
+                    resolve(result);
+                } else {
+                    reject(new Error('Failed to read file as text content.'));
+                }
+            };
 
-        reader.onload = () => {
-            const result = reader.result;
-            if (typeof result === 'string') {
-                resolve(result);
-            } else {
-                reject(new Error('Failed to read file as text content.'));
-            }
-        };
+            reader.onerror = () => {
+                reject(new Error(reader.error ? reader.error.message : 'Error occurred while reading the file.'));
+            };
 
-        reader.onerror = () => {
-            reject(new Error(reader.error ? reader.error.message : 'Error occurred while reading the file.'));
-        };
+            reader.onabort = () => {
+                reject(new Error('File reading was aborted.'));
+            };
 
-        reader.onabort = () => {
-            reject(new Error('File reading was aborted.'));
-        };
+            reader.readAsText(file);
+        });
+    }
 
-        reader.readAsText(file);
-    });
+    if (file && typeof file.text === 'function') {
+        return await file.text();
+    }
+
+    throw new Error('FileReader API is not supported in this environment.');
 }
 
 /**

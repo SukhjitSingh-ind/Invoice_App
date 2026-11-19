@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db.js';
-import { TEMPLATES } from '../utils/templates';
+import { TEMPLATES, formatCustomTemplateForPicker } from '../utils/templates';
 import UploadTemplateModal from '../components/TemplateManager/UploadTemplateModal';
 import TemplatePreviewModal from '../components/TemplateManager/TemplatePreviewModal';
 import { saveClient, createEmptyClient } from '../services/clientService.js';
@@ -55,18 +55,7 @@ export default function CreateInvoice() {
 
     // Combined template catalog: custom templates + legacy built-in themes
     const allTemplates = useMemo(() => {
-        const customFormatted = customTemplates.map(ct => ({
-            id: ct.key || String(ct.id),
-            numericId: ct.id,
-            name: ct.name,
-            description: 'Custom user-uploaded invoice layout',
-            color: 'purple',
-            previewColor: 'bg-gradient-to-br from-indigo-700 via-purple-700 to-indigo-950',
-            layout: 'custom',
-            paperClass: 'bg-white',
-            isCustom: true,
-            rawRecord: ct
-        }));
+        const customFormatted = customTemplates.map(formatCustomTemplateForPicker).filter(Boolean);
         return [...customFormatted, ...TEMPLATES];
     }, [customTemplates]);
 

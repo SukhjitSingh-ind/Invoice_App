@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import {
     validateTemplateFile,
+    readTemplateFileAsync,
     validateTemplateHtml,
     detectTemplateTokens,
     validateTemplateName,
@@ -8,6 +9,7 @@ import {
     SAMPLE_INVOICE_DATA,
     SUPPORTED_TEMPLATE_TOKENS
 } from './templateValidator.js';
+import { formatCustomTemplateForPicker } from './templates.js';
 import { saveTemplateAsync, getAllTemplatesAsync, deleteTemplateAsync } from '../services/templateService.js';
 import { db } from '../db/db.js';
 
@@ -46,6 +48,114 @@ async function runTests() {
     assert(validateTemplateFile({ name: 'custom-template.htm' }).valid, 'Accepts .htm file');
     assert(validateTemplateFile({ name: 'UPPERCASE.HTML' }).valid, 'Accepts case-insensitive .HTML file');
     assert(validateTemplateFile({ name: 'MIXED_CASE.Htm' }).valid, 'Accepts case-insensitive .Htm file');
+
+    // File size boundary tests
+    assert(validateTemplateFile({ name: 'template.html', size: 1024 }).valid, 'Accepts file smaller than 2 MB');
+    assert(validateTemplateFile({ name: 'template.html', size: 2 * 1024 * 1024 }).valid, 'Accepts file exactly 2 MB');
+
+    const overLimit = validateTemplateFile({ name: 'large.html', size: 2 * 1024 * 1024 + 1 });
+    assert(!overLimit.valid, 'Rejects file larger than 2 MB');
+    assert(overLimit.error.includes('2 MB limit'), 'Rejection error mentions 2 MB limit');
+
+    const emptyFile = validateTemplateFile({ name: 'empty.html', size: 0 });
+    assert(!emptyFile.valid, 'Rejects file with size 0 bytes');
+    assert(emptyFile.error.includes('empty'), 'Rejection error mentions empty file');
+
+    // =========================================================================
+    // 1B. ASYNC FILE READER UTILITY TESTS
+    // =========================================================================
+    console.log('\n--- 1B. Testing readTemplateFileAsync ---');
+
+    try {
+        await readTemplateFileAsync({ name: 'bad.pdf', size: 50 });
+        assert(false, 'readTemplateFileAsync should reject bad file extension');
+    } catch (err) {
+        assert(err.message.includes('.html and .htm') || err.message.includes('.html or .htm'), 'readTemplateFileAsync rejects invalid extension with message');
+    }
+
+    try {
+        await readTemplateFileAsync({ name: 'oversized.html', size: 3 * 1024 * 1024 });
+        assert(false, 'readTemplateFileAsync should reject oversized file');
+    } catch (err) {
+        assert(err.message.includes('2 MB limit'), 'readTemplateFileAsync rejects file > 2MB');
+    }
+
+    // Fallback file.text() read when FileReader is not globally defined
+    const savedFileReader = globalThis.FileReader;
+    try {
+        delete globalThis.FileReader;
+        const textFile = {
+            name: 'sample.html',
+            size: 50,
+            text: async () => '<div>Fallback content</div>'
+        };
+        const fallbackContent = await readTemplateFileAsync(textFile);
+        assert(fallbackContent === '<div>Fallback content</div>', 'readTemplateFileAsync succeeds using file.text() fallback');
+    } finally {
+        if (savedFileReader) {
+            globalThis.FileReader = savedFileReader;
+        }
+    }
+
+    // Mock FileReader success
+    class MockSuccessFileReader {
+        readAsText() {
+            setTimeout(() => {
+                this.result = '<h1>Mock Read Content</h1>';
+                if (typeof this.onload === 'function') {
+                    this.onload({ target: { result: this.result } });
+                }
+            }, 5);
+        }
+    }
+    globalThis.FileReader = MockSuccessFileReader;
+    const mockFileSuccess = { name: 'mock.html', size: 100 };
+    const successResult = await readTemplateFileAsync(mockFileSuccess);
+    assert(successResult === '<h1>Mock Read Content</h1>', 'readTemplateFileAsync succeeds with FileReader');
+
+    // Mock FileReader error
+    class MockErrorFileReader {
+        readAsText() {
+            setTimeout(() => {
+                this.error = new Error('Disk read failure');
+                if (typeof this.onerror === 'function') {
+                    this.onerror();
+                }
+            }, 5);
+        }
+    }
+    globalThis.FileReader = MockErrorFileReader;
+    try {
+        await readTemplateFileAsync({ name: 'fail.html', size: 100 });
+        assert(false, 'readTemplateFileAsync should reject on FileReader error');
+    } catch (err) {
+        assert(err.message.includes('Disk read failure') || err.message.includes('Error occurred while reading the file'), 'readTemplateFileAsync handles FileReader onerror');
+    }
+
+    // Mock FileReader abort
+    class MockAbortFileReader {
+        readAsText() {
+            setTimeout(() => {
+                if (typeof this.onabort === 'function') {
+                    this.onabort();
+                }
+            }, 5);
+        }
+    }
+    globalThis.FileReader = MockAbortFileReader;
+    try {
+        await readTemplateFileAsync({ name: 'abort.html', size: 100 });
+        assert(false, 'readTemplateFileAsync should reject on FileReader abort');
+    } catch (err) {
+        assert(err.message.includes('aborted'), 'readTemplateFileAsync handles FileReader onabort');
+    }
+
+    // Restore original FileReader
+    if (savedFileReader) {
+        globalThis.FileReader = savedFileReader;
+    } else {
+        delete globalThis.FileReader;
+    }
 
     // =========================================================================
     // 2. HTML CONTENT & EMPTY FILE VALIDATION
@@ -204,6 +314,32 @@ async function runTests() {
     await deleteTemplateAsync(savedId, db);
     const afterDelete = await db.templates.get(savedId);
     assert(afterDelete === undefined, 'Custom template successfully deleted after test');
+
+    // =========================================================================
+    // 7. FORMAT CUSTOM TEMPLATE FOR PICKER (Centralized Transformer)
+    // =========================================================================
+    console.log('\n--- 7. Testing formatCustomTemplateForPicker ---');
+
+    assert(formatCustomTemplateForPicker(null) === null, 'formatCustomTemplateForPicker handles null');
+    assert(formatCustomTemplateForPicker(undefined) === null, 'formatCustomTemplateForPicker handles undefined');
+
+    const rawDexieTpl = {
+        id: 42,
+        name: 'My Special Template',
+        html: '<div>{{sender.name}}</div>',
+        css: 'body { color: red; }',
+        isBuiltIn: false
+    };
+
+    const formattedTpl = formatCustomTemplateForPicker(rawDexieTpl);
+    assert(formattedTpl.id === 42, 'Preserves numeric id');
+    assert(formattedTpl.numericId === 42, 'Sets numericId property');
+    assert(formattedTpl.key === 'custom_42', 'Sets predictable key slug');
+    assert(formattedTpl.name === 'My Special Template', 'Preserves template name');
+    assert(formattedTpl.layout === 'custom', 'Assigns layout: custom');
+    assert(formattedTpl.isCustom === true, 'Sets isCustom flag to true');
+    assert(typeof formattedTpl.previewColor === 'string' && formattedTpl.previewColor.includes('gradient'), 'Assigns aesthetic previewColor gradient');
+    assert(formattedTpl.description.includes('My Special Template'), 'Generates meaningful description');
 
     console.log(`\nTests Completed: ${passed} Passed, ${failed} Failed`);
     if (failed > 0) {

@@ -100,6 +100,7 @@ export interface ResolutionOptions {
   senderProfile?: Partial<InvoiceParty> | null;
   bankDetailsFallback?: Partial<BankDetails> | null;
   nextInvoiceNumberFallback?: string;
+  availableTemplates?: Array<{ id: string | number; name: string; key?: string; [key: string]: unknown }> | null;
 }
 
 export type ClientSource = 'manual' | 'json' | 'none';

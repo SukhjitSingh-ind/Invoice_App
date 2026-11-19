@@ -24,3 +24,5 @@ export const BUILT_IN_TEMPLATE_KEYS = Object.freeze({
 export const DEFAULT_BUILT_IN_TEMPLATE_NAME = BUILT_IN_TEMPLATE_NAMES.CLASSIC;
 
 export const TEMPLATE_SCHEMA = '++id, name, isDefault, isBuiltIn, updatedAt';
+
+export const MAX_TEMPLATE_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB

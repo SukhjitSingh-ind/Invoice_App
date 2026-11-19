@@ -85,7 +85,45 @@ export const TEMPLATES = [
     }
 ];
 
-export const getTemplateById = (id) => TEMPLATES.find(t => t.id === id) || TEMPLATES[0];
+export const getTemplateById = (id, customTemplates = []) => {
+    if (Array.isArray(customTemplates) && customTemplates.length > 0) {
+        const found = customTemplates.find(
+            (t) => String(t.id) === String(id) || (t.key && t.key === String(id))
+        );
+        if (found) return found;
+    }
+    return TEMPLATES.find((t) => t.id === id || String(t.id) === String(id)) || TEMPLATES[0];
+};
+
+/**
+ * Normalizes a Dexie custom template record into a consistent selectable template object.
+ * Guarantees uniform preview colors, layout badges, and visual metadata across all invoice creation workflows.
+ *
+ * @param {object} template - Dexie database template record
+ * @returns {object|null}
+ */
+export function formatCustomTemplateForPicker(template) {
+    if (!template || typeof template !== 'object') return null;
+
+    const templateId = template.id !== undefined && template.id !== null ? template.id : template.key;
+    const templateKey = template.key || (template.id !== undefined && template.id !== null ? `custom_${template.id}` : undefined);
+
+    return {
+        id: templateId,
+        key: templateKey,
+        numericId: typeof template.id === 'number' ? template.id : undefined,
+        name: template.name || 'Untitled Custom Template',
+        description: template.name ? `Custom uploaded template: ${template.name}` : 'Custom user-uploaded invoice layout',
+        color: 'purple',
+        previewColor: 'bg-gradient-to-br from-indigo-700 via-purple-700 to-indigo-950',
+        layout: 'custom',
+        paperClass: 'bg-white',
+        isCustom: true,
+        rawRecord: template,
+        html: template.html || '',
+        css: template.css || ''
+    };
+}
 
 /* =========================================================================
    TEMPLATE TOKEN ENGINE & SANITIZER
